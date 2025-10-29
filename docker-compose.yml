@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # Frontend - React Application
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: vidyutai-frontend
+    ports:
+      - "80:80"
+    environment:
+      - VITE_API_BASE_URL=http://backend:3000/api/v1
+      - VITE_WS_URL=ws://backend:3000
+    depends_on:
+      - backend
+    networks:
+      - vidyutai-network
+    restart: unless-stopped
+
+  # Backend - Node.js + Express + SQLite
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: vidyutai-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
+      - DATABASE_PATH=/app/database/vidyutai.db
+    volumes:
+      # Persist database
+      - vidyutai-db:/app/database
+    networks:
+      - vidyutai-network
+    restart: unless-stopped
+
+  # AI Service - Python FastAPI
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai-service
+    container_name: vidyutai-ai-service
+    ports:
+      - "8000:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - DEBUG=False
+      - DATABASE_PATH=/app/database/vidyutai.db
+    volumes:
+      # Share database with backend
+      - vidyutai-db:/app/database:ro
+    networks:
+      - vidyutai-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+networks:
+  vidyutai-network:
+    driver: bridge
+
+volumes:
+  vidyutai-db:
+    driver: local
+

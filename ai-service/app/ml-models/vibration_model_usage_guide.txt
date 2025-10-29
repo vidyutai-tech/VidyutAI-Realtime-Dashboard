@@ -1,0 +1,43 @@
+
+# --- Usage Guide for Motor Vibration Diagnosis Model ---
+
+# 1. PURPOSE:
+# This Random Forest model diagnoses the health condition of an electric motor
+# based on a small window of its 3-axis vibration data.
+# It was trained on the SOON-pEMP dataset and achieved 93.75% accuracy on its test set.
+
+# 2. REQUIRED FILES:
+# - vibration_model.joblib (the trained model)
+# - vibration_scaler.joblib (the data scaler)
+# - vibration_label_encoder.joblib (the label encoder for decoding predictions)
+# - vibration_model_features.json (the list of required input features)
+
+# 3. INPUT:
+# The model requires a pandas DataFrame where each row contains 24 features
+# extracted from a window of raw vibration data (AccX, AccY, AccZ).
+# The feature names are stored in 'vibration_model_features.json'.
+
+# 4. EXAMPLE USAGE (PYTHON):
+# import pandas as pd
+# import joblib
+# import json
+
+# # Load the assets
+# model = joblib.load('vibration_model.joblib')
+# scaler = joblib.load('vibration_scaler.joblib')
+# label_encoder = joblib.load('vibration_label_encoder.joblib')
+# with open('vibration_model_features.json', 'r') as f:
+#     model_features = json.load(f)
+
+# # Create a sample input DataFrame (one row = one window of features)
+# # In a real application, these values would come from your feature extraction function.
+# sample_input = pd.DataFrame([{'AccX_mean': 297.0, 'AccX_std': 1774.1, 'AccX_rms': 1798.5, # ... and so on for all 24 features ... }])
+# sample_input = sample_input.reindex(columns=model_features, fill_value=0) # Ensure correct column order
+
+# # Scale the input features and make a prediction
+# sample_input_scaled = scaler.transform(sample_input)
+# prediction_encoded = model.predict(sample_input_scaled)
+# prediction_label = label_encoder.inverse_transform(prediction_encoded)
+
+# print(f"Predicted Motor Condition: {prediction_label[0]}")
+

@@ -1,0 +1,15 @@
+# ems-backend/requirements.txt
+
+fastapi
+uvicorn[standard]
+pydantic[email]
+python-jose[cryptography]
+passlib==1.7.4
+python-dotenv
+tensorflow
+scikit-learn
+pandas
+bcrypt==3.2.0
+stable-baselines3[extra]
+pydantic_settings
+langchain_openai

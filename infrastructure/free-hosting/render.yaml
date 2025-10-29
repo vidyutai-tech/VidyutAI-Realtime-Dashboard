@@ -1,0 +1,58 @@
+# Render.com deployment configuration for VidyutAI Dashboard
+# Free tier: https://render.com
+
+services:
+  # Backend Service
+  - type: web
+    name: vidyutai-backend
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: cd backend && npm install && node database/init-db.js
+    startCommand: cd backend && node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: JWT_SECRET
+        generateValue: true
+    healthCheckPath: /health
+
+  # AI Service
+  - type: web
+    name: vidyutai-ai-service
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: cd ai-service && pip install -r requirements.txt
+    startCommand: cd ai-service && uvicorn app.main:app --host 0.0.0.0 --port 8000
+    envVars:
+      - key: PORT
+        value: 8000
+    healthCheckPath: /health
+
+  # Frontend Service (Static Site)
+  - type: web
+    name: vidyutai-frontend
+    env: static
+    region: oregon
+    plan: free
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+databases:
+  # SQLite will be file-based, no external DB needed for free tier
+  # For production, consider PostgreSQL
+

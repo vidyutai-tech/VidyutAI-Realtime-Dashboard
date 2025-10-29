@@ -1,0 +1,49 @@
+
+# --- Usage Guide for LSTM Solar Forecast Model ---
+
+# 1. PURPOSE:
+# This LSTM model forecasts the future AC Power (kW) of a solar plant
+# by analyzing a sequence of past data (Irradiation and AC Power).
+
+# 2. REQUIRED FILES:
+# - lstm_solar_forecast_model.keras (the trained Keras model)
+# - lstm_solar_scaler.joblib (the MinMaxScaler for data preparation)
+# - lstm_model_metadata.json (contains metadata like the 'look_back' period)
+
+# 3. INPUT:
+# The model requires a sequence of scaled data. Specifically, a NumPy array
+# with the shape (n_samples, 24, 2).
+# The input data MUST be scaled using the saved 'lstm_solar_scaler.joblib'.
+
+# 4. EXAMPLE USAGE (PYTHON):
+# import numpy as np
+# from tensorflow.keras.models import load_model
+# import joblib
+# import json
+
+# # Load assets
+# model = load_model('lstm_solar_forecast_model.keras')
+# scaler = joblib.load('lstm_solar_scaler.joblib')
+# with open('lstm_model_metadata.json', 'r') as f:
+#     metadata = json.load(f)
+# look_back = metadata['look_back']
+
+# # Create a sample input sequence (e.g., last 6 hours of data)
+# # Shape must be (look_back, 2) -> (24, 2)
+# sample_raw_sequence = np.random.rand(look_back, 2) # Replace with real data
+# sample_scaled_sequence = scaler.transform(sample_raw_sequence)
+
+# # Reshape for the model: (1 sample, 24 timesteps, 2 features)
+# sample_reshaped = np.reshape(sample_scaled_sequence, (1, look_back, 2))
+
+# # Make a scaled prediction
+# predicted_scaled = model.predict(sample_reshaped)
+
+# # Inverse transform to get the real value in kW
+# dummy_array = np.zeros((1, 2))
+# dummy_array[0, 1] = predicted_scaled[0, 0]
+# predicted_unscaled = scaler.inverse_transform(dummy_array)
+# final_prediction_kw = predicted_unscaled[0, 1]
+
+# print(f"Predicted AC Power: {final_prediction_kw:.2f} kW")
+

@@ -1,0 +1,42 @@
+
+# --- Usage Guide for Solar Forecast Model ---
+
+# 1. PURPOSE:
+# This XGBoost model predicts the future AC Power (kW) of a solar plant.
+# The model was trained on data from Plant 1 and achieved a Mean Absolute Error of 238.03 kW on its test set.
+
+# 2. REQUIRED FILES:
+# - solar_forecast_model.json (the trained model)
+# - solar_model_features.json (the list of required input features)
+
+# 3. INPUT FEATURES:
+# The model requires a pandas DataFrame with the following columns:
+# ['AMBIENT_TEMPERATURE', 'MODULE_TEMPERATURE', 'IRRADIATION', 'HOUR', 'DAY_OF_WEEK', 'MONTH']
+
+# 4. EXAMPLE USAGE (PYTHON):
+# import pandas as pd
+# import xgboost as xgb
+# import json
+
+# # Load the model and feature list
+# forecast_model = xgb.XGBRegressor()
+# forecast_model.load_model('solar_forecast_model.json')
+# with open('solar_model_features.json', 'r') as f:
+#     model_features = json.load(f)
+
+# # Create a sample input DataFrame for one prediction
+# # IMPORTANT: The columns must match the 'model_features' list
+# sample_input = pd.DataFrame([{
+#     'AMBIENT_TEMPERATURE': 25.0,
+#     'MODULE_TEMPERATURE': 30.0,
+#     'IRRADIATION': 0.5,
+#     'HOUR': 13,
+#     'DAY_OF_WEEK': 4, # Friday
+#     'MONTH': 5 # May
+# }])
+
+# # Make a prediction
+# # Ensure columns are in the same order as when the model was trained
+# predicted_power = forecast_model.predict(sample_input[model_features])
+# print(f"Predicted AC Power: {predicted_power[0]:.2f} kW")
+

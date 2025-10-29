@@ -1,0 +1,138 @@
+const Database = require('better-sqlite3');
+const path = require('path');
+const fs = require('fs');
+
+// Database file path
+const DB_PATH = path.join(__dirname, 'vidyutai.db');
+const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
+const SEED_PATH = path.join(__dirname, 'seed.sql');
+
+// Initialize database connection
+let db;
+
+function initializeDatabase() {
+  try {
+    // Create database connection
+    db = new Database(DB_PATH, { verbose: console.log });
+    
+    // Enable foreign keys
+    db.pragma('foreign_keys = ON');
+    
+    console.log('✅ Database connection established');
+    return db;
+  } catch (error) {
+    console.error('❌ Failed to initialize database:', error);
+    throw error;
+  }
+}
+
+function createTables() {
+  try {
+    const schema = fs.readFileSync(SCHEMA_PATH, 'utf8');
+    db.exec(schema);
+    console.log('✅ Database tables created successfully');
+  } catch (error) {
+    console.error('❌ Failed to create tables:', error);
+    throw error;
+  }
+}
+
+function seedDatabase() {
+  try {
+    const seed = fs.readFileSync(SEED_PATH, 'utf8');
+    db.exec(seed);
+    console.log('✅ Database seeded successfully');
+  } catch (error) {
+    console.error('❌ Failed to seed database:', error);
+    throw error;
+  }
+}
+
+function insertTimeseriesData() {
+  try {
+    // Generate sample timeseries data for the last 24 hours
+    const insertStmt = db.prepare(`
+      INSERT INTO timeseries_data (site_id, asset_id, timestamp, metric_type, metric_value, unit)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    const now = new Date();
+    const metrics = [
+      { type: 'voltage', base: 415, variance: 15, unit: 'V' },
+      { type: 'current', base: 120, variance: 30, unit: 'A' },
+      { type: 'frequency', base: 50, variance: 0.3, unit: 'Hz' },
+      { type: 'pv_generation', base: 500, variance: 300, unit: 'kW' },
+      { type: 'net_load', base: 400, variance: 200, unit: 'kW' },
+      { type: 'battery_discharge', base: 50, variance: 100, unit: 'kW' },
+      { type: 'grid_draw', base: 100, variance: 150, unit: 'kW' },
+      { type: 'soc', base: 70, variance: 20, unit: '%' }
+    ];
+
+    const insertMany = db.transaction(() => {
+      // Generate data points for last 24 hours (5-minute intervals = 288 points)
+      for (let i = 288; i >= 0; i--) {
+        const timestamp = new Date(now - i * 5 * 60 * 1000);
+        
+        metrics.forEach(metric => {
+          const value = metric.base + (Math.random() * metric.variance * 2 - metric.variance);
+          insertStmt.run('site-1', null, timestamp.toISOString(), metric.type, value, metric.unit);
+        });
+      }
+    });
+
+    insertMany();
+    console.log('✅ Timeseries data inserted successfully');
+  } catch (error) {
+    console.error('❌ Failed to insert timeseries data:', error);
+    throw error;
+  }
+}
+
+function setupDatabase() {
+  try {
+    console.log('🔧 Setting up database...');
+    
+    initializeDatabase();
+    createTables();
+    seedDatabase();
+    insertTimeseriesData();
+    
+    console.log('✅ Database setup complete!');
+  } catch (error) {
+    console.error('❌ Database setup failed:', error);
+    process.exit(1);
+  }
+}
+
+function getDatabase() {
+  if (!db) {
+    initializeDatabase();
+  }
+  return db;
+}
+
+function closeDatabase() {
+  if (db) {
+    db.close();
+    console.log('✅ Database connection closed');
+  }
+}
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  closeDatabase();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  closeDatabase();
+  process.exit(0);
+});
+
+module.exports = {
+  setupDatabase,
+  getDatabase,
+  closeDatabase,
+  initializeDatabase
+};
+

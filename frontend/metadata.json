@@ -1,0 +1,5 @@
+{
+  "name": "Next-Gen Energy Management System Dashboard",
+  "description": "An operator dashboard for a Next-Gen Energy Management System (EMS) that shows site overview, real-time telemetry, health indices, alerts, RL suggestions, a what-if simulator, and device details.",
+  "requestFramePermissions": []
+}
