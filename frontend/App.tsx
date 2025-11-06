@@ -19,6 +19,7 @@ import PredictionsPage from './pages/PredictionsPage';
 import ManageSitesPage from './pages/ManageSitesPage';
 import ManageAssetsPage from './pages/ManageAssetsPage';
 import DigitalTwinPage from './pages/DigitalTwinPage';
+import SourceOptimizationPage from './pages/SourceOptimizationPage';
 import { AppContext } from './contexts/AppContext';
 import { Telemetry, Alert, RLSuggestion, HealthStatus, Site, RLStrategy } from './types';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -289,6 +290,7 @@ const App: React.FC = () => {
                                 <Route path="/site-detail" element={<SiteDetailPage />} />
                                 <Route path="/impact" element={<ImpactPage />} />
                                 <Route path="/digital-twin" element={<DigitalTwinPage />} />
+                                <Route path="/source-optimization" element={<SourceOptimizationPage />} />
                                 <Route path="/alerts" element={<AlertsPage />} />
                                 <Route path="/maintenance" element={<MaintenancePage />} />
                                 <Route path="/simulator" element={<SimulatorPage />} />
