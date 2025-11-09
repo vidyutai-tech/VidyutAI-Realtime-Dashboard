@@ -7,6 +7,7 @@ providing real-time data analysis and insights for energy management.
 import os
 import logging
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 # Import local modules
@@ -30,6 +31,15 @@ app = FastAPI(
     title="VidyutAI AI Service",
     description="AI-powered analytics for energy management systems",
     version="0.1.0",
+)
+
+# Enable CORS for frontend integration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Include API routes
