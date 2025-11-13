@@ -12,6 +12,15 @@ import {
   AreaChart,
   Area,
 } from "recharts";
+import {
+  BatteryCharging,
+  DollarSign,
+  Fuel,
+  Gauge,
+  Leaf,
+  Sun,
+  Zap,
+} from "lucide-react";
 
 const SourceOptimizationPage = () => {
   const { currentUser } = useContext(AppContext)!;
@@ -45,7 +54,7 @@ const SourceOptimizationPage = () => {
   const [plotUrl, setPlotUrl] = useState<string | null>(null);
 
   const controlWrapperClass = "form-control space-y-2";
-  const labelClass = "label-text text-xs font-semibold uppercase tracking-wide text-base-content/60";
+  const labelClass = "label-text text-xs font-semibold tracking-wide text-base-content/60";
   const inputClass =
     "input input-bordered w-full rounded-xl border-base-200 bg-base-200/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 transition-shadow";
   const selectClass =
@@ -53,6 +62,46 @@ const SourceOptimizationPage = () => {
   const fileInputClass =
     "file-input file-input-bordered w-full rounded-xl border-base-200 bg-base-200/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 transition-shadow";
   const sectionPanelClass = "space-y-4 rounded-2xl border border-base-200/60 bg-base-100/70 p-5 shadow-sm";
+
+  const formatNumber = (
+    value: number | string | null | undefined,
+    maximumFractionDigits = 2
+  ): string => {
+    if (value === null || value === undefined || value === "" || Number.isNaN(Number(value))) {
+      return "-";
+    }
+    const numericValue = Number(value);
+    return numericValue.toLocaleString("en-IN", {
+      maximumFractionDigits,
+    });
+  };
+
+  const formatCurrency = (value: number | string | null | undefined): string => {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) {
+      return "-";
+    }
+    const numericValue = Number(value);
+    return numericValue.toLocaleString("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 2,
+    });
+  };
+
+  const formatPercent = (
+    value: number | string | null | undefined,
+    maximumFractionDigits = 1
+  ): string => {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) {
+      return "-";
+    }
+    return `${formatNumber(Number(value), maximumFractionDigits)}%`;
+  };
+
+  const formatKWh = (value: number | string | null | undefined, digits = 2): string => {
+    const formatted = formatNumber(value, digits);
+    return formatted === "-" ? "-" : `${formatted} kWh`;
+  };
 
   useEffect(() => {
     const savedResponse = localStorage.getItem("sourceOptimizationResponse");
@@ -158,6 +207,12 @@ const SourceOptimizationPage = () => {
     setOpen(false);
   };
 
+  const summary = response?.summary;
+  const displayWeather = summary?.Weather ?? formData.weather;
+  const displayProfile = summary?.Notes?.Profile_Type ?? formData.profile_type;
+  const displayResolution = summary?.Resolution_min ?? formData.time_resolution_minutes;
+  const displayDays = summary?.Optimization_Period_days ?? formData.num_days;
+
   const formattedBreakdown = useMemo(() => {
     if (!response?.summary?.Costs?.Breakdown) return [];
     const breakdown = response.summary.Costs.Breakdown;
@@ -177,57 +232,105 @@ const SourceOptimizationPage = () => {
   }, [response]);
 
   const keyMetrics = useMemo(() => {
-    if (!response?.summary) return [];
-    const summary = response.summary;
+    if (!summary) {
+      return [
+        {
+          title: "Ready to Optimize",
+          value: "Configure inputs",
+          subtext: "Adjust parameters or upload CSV to generate results.",
+          accent: "from-slate-500 to-slate-600",
+          icon: Zap,
+        },
+        {
+          title: "Weather Profile",
+          value: displayWeather,
+          subtext: "Impacts available solar resource and dispatch mix.",
+          accent: "from-sky-500 to-cyan-500",
+          icon: Sun,
+        },
+        {
+          title: "Time Horizon",
+          value: `${displayDays} day${displayDays > 1 ? "s" : ""}`,
+          subtext: `${displayResolution}-minute resolution`,
+          accent: "from-indigo-500 to-purple-500",
+          icon: Gauge,
+        },
+        {
+          title: "Profile Type",
+          value: displayProfile,
+          subtext: "Run optimization to calculate savings & dispatch.",
+          accent: "from-amber-500 to-orange-500",
+          icon: DollarSign,
+        },
+      ];
+    }
+
+    const costPerKwh = summary.Costs?.Cost_per_kWh_INR;
     return [
       {
-        title: "Total Load Served",
-        value: `${summary.Load?.Total_Demand_kWh ?? "-"} kWh`,
-        subtext: `${summary.Optimization_Period_days} days • ${summary.Resolution_min}-min`,
+        title: "Total Optimized Cost",
+        value: formatCurrency(summary.Costs?.TOTAL_COST_INR),
+        subtext: costPerKwh ? `${formatCurrency(costPerKwh)} per kWh` : "Includes grid, diesel & storage costs",
+        accent: "from-emerald-500 via-emerald-500 to-emerald-600",
+        icon: DollarSign,
       },
       {
         title: "Solar Utilization",
-        value: `${summary.Solar?.Used_Percent ?? 0}%`,
-        subtext: `${summary.Solar?.Used_kWh ?? "-"} kWh used of ${summary.Solar?.Capacity_kW ?? "-"} kW`,
+        value: formatPercent(summary.Solar?.Used_Percent),
+        subtext: `${formatKWh(summary.Solar?.Used_kWh)} used of ${formatKWh(summary.Solar?.Available_kWh)} available`,
+        accent: "from-amber-500 to-orange-500",
+        icon: Sun,
       },
       {
         title: "Grid Imports",
-        value: `${summary.Grid?.Import_kWh ?? "-"} kWh`,
-        subtext: `Estimated cost ₹${summary.Grid?.Estimated_Cost_INR ?? "-"}`,
+        value: formatKWh(summary.Grid?.Import_kWh),
+        subtext: summary.Grid?.Energy_Cost_INR != null ? `${formatCurrency(summary.Grid?.Energy_Cost_INR)}` : "Includes peak tariff impact",
+        accent: "from-sky-500 to-blue-500",
+        icon: Gauge,
       },
       {
         title: "Battery Cycling",
-        value: `${summary.Battery?.Charged_kWh ?? "-"} / ${summary.Battery?.Discharged_kWh ?? "-"} kWh`,
-        subtext: `${summary.Battery?.Capacity_kWh ?? "-"} kWh @ ${summary.Battery?.Voltage_V ?? "-"}V`,
-      },
-      {
-        title: "Diesel Usage",
-        value: `${summary.Diesel?.Used_kWh ?? 0} kWh`,
-        subtext: `${summary.Diesel?.Fuel_Consumed_L ?? 0} L • ₹${summary.Diesel?.Fuel_Cost_INR ?? 0}`,
-      },
-      {
-        title: "Total Cost",
-        value: `₹${summary.Costs?.TOTAL_COST_INR ?? "-"}`,
-        subtext: `₹${summary.Costs?.Cost_per_kWh_INR ?? "-"} per kWh`,
+        value: `${formatKWh(summary.Battery?.Charged_kWh)} / ${formatKWh(summary.Battery?.Discharged_kWh)}`,
+        subtext: `${formatNumber(summary.Battery?.Capacity_kWh)} kWh • ${formatNumber(summary.Battery?.Voltage_V, 0)} V`,
+        accent: "from-violet-500 to-purple-500",
+        icon: BatteryCharging,
       },
     ];
-  }, [response]);
+  }, [summary, displayWeather, displayDays, displayResolution, displayProfile]);
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-8">
-      <div className="card bg-base-100 shadow-xl">
-        <div className="card-body">
-          <h2 className="card-title text-2xl font-bold mb-6 text-center">
-            Source Optimization Analysis
-          </h2>
-          <p className="text-center mb-6 text-gray-600">
-            Optimize your energy management system by analyzing load patterns, 
-            solar generation, and grid interactions to minimize costs and maximize efficiency.
-          </p>
+    <div className="max-w-6xl mx-auto space-y-8 p-6 pb-12">
+      <div className="rounded-3xl border border-base-200/60 bg-base-100/95 shadow-xl shadow-sky-100/30">
+        <div className="space-y-8 p-7 md:p-8">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-primary/70">
+                Configure Scenario
+              </p>
+              <h2 className="mt-2 text-2xl font-semibold text-base-content md:text-3xl">
+                Optimization Configuration
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm text-base-content/70 md:text-[0.95rem]">
+                Update capacities, tariffs, and operational constraints or upload a dispatch-ready CSV.
+                These inputs steer the optimizer to rebuild the hybrid energy strategy for your facility.
+              </p>
+            </div>
+            <div className="grid gap-2 text-right md:text-left">
+              <span className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
+                Last Prepared Scenario
+              </span>
+              <span className="text-base font-semibold text-base-content capitalize">
+                {displayDays} day{displayDays > 1 ? "s" : ""} • {displayResolution}-minute resolution
+              </span>
+              <span className="text-sm text-base-content/60">
+                Weather: <span className="capitalize">{displayWeather}</span> · Profile: <span className="capitalize">{displayProfile}</span>
+              </span>
+            </div>
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             {/* Basic Parameters */}
             <div className={sectionPanelClass}>
-              <h3 className="text-lg font-semibold">Basic Parameters</h3>
+              <h3 className="text-lg font-semibold">Basic parameters</h3>
               
               <div className={controlWrapperClass}>
                 <label className="label">
@@ -296,84 +399,143 @@ const SourceOptimizationPage = () => {
 
             {/* System Configuration */}
             <div className={sectionPanelClass}>
-              <h3 className="text-lg font-semibold">System Configuration</h3>
-              
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Grid Connection (kW)</span>
-                </label>
-                <input
-                  type="number"
-                  name="grid_connection"
-                  value={formData.grid_connection}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  step="100"
-                />
-              </div>
+              <h3 className="text-lg font-semibold">System configuration</h3>
+              <div className="flex flex-col gap-4">
+                <div className={controlWrapperClass}>
+                  <label className="label">
+                    <span className={labelClass}>Grid Connection (kW)</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="grid_connection"
+                    value={formData.grid_connection}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                    step="100"
+                  />
+                </div>
 
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Solar Connection (kW)</span>
-                </label>
-                <input
-                  type="number"
-                  name="solar_connection"
-                  value={formData.solar_connection}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  step="100"
-                />
-              </div>
+                <div className={controlWrapperClass}>
+                  <label className="label">
+                    <span className={labelClass}>Solar Connection (kW)</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="solar_connection"
+                    value={formData.solar_connection}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                    step="100"
+                  />
+                </div>
 
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Battery Capacity (Wh)</span>
-                </label>
-                <input
-                  type="number"
-                  name="battery_capacity"
-                  value={formData.battery_capacity}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  step="1000"
-                />
-              </div>
+                <div className={controlWrapperClass}>
+                  <label className="label">
+                    <span className={labelClass}>Battery Capacity (Ah)</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="battery_capacity"
+                    value={formData.battery_capacity}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                    step="1000"
+                  />
+                </div>
 
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Battery Voltage (V)</span>
-                </label>
-                <input
-                  type="number"
-                  name="battery_voltage"
-                  value={formData.battery_voltage}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  step="10"
-                />
+                <div className={controlWrapperClass}>
+                  <label className="label">
+                    <span className={labelClass}>Battery Voltage (V)</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="battery_voltage"
+                    value={formData.battery_voltage}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                    step="10"
+                  />
+                </div>
+
+                <div className={controlWrapperClass}>
+                  <label className="label">
+                    <span className={labelClass}>Diesel Capacity (kW)</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="diesel_capacity"
+                    value={formData.diesel_capacity}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                    step="100"
+                  />
+                </div>
+
+                <div className={controlWrapperClass}>
+                  <label className="label">
+                    <span className={labelClass}>Electrolyzer Capacity (kW)</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="electrolyzer_capacity"
+                    value={formData.electrolyzer_capacity}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                    step="10"
+                  />
+                </div>
+
+                <div className={controlWrapperClass}>
+                  <label className="label">
+                    <span className={labelClass}>Fuel Cell Capacity (kW)</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="fuel_cell_capacity"
+                    value={formData.fuel_cell_capacity}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                    step="10"
+                  />
+                </div>
+
+                <div className={controlWrapperClass}>
+                  <label className="label">
+                    <span className={labelClass}>H2 Tank Capacity (kg)</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="h2_tank_capacity"
+                    value={formData.h2_tank_capacity}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                    step="1"
+                  />
+                </div>
+
+                <div className={controlWrapperClass}>
+                  <label className="label">
+                    <span className={labelClass}>Fuel Cell Efficiency (0-1)</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="fuel_cell_efficiency_percent"
+                    value={formData.fuel_cell_efficiency_percent}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                    step="0.01"
+                    min="0"
+                    max="1"
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Cost Parameters */}
+          {/* Cost parameters */}
           <div className={sectionPanelClass}>
-            <h3 className="text-lg font-semibold mb-4">Cost Parameters</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Diesel Capacity (kW)</span>
-                </label>
-                <input
-                  type="number"
-                  name="diesel_capacity"
-                  value={formData.diesel_capacity}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  step="100"
-                />
-              </div>
-
+            <h3 className="text-lg font-semibold mb-4">Cost parameters</h3>
+            <div className="flex flex-col gap-4">
               <div className={controlWrapperClass}>
                 <label className="label">
                   <span className={labelClass}>Fuel Price (Rs/L)</span>
@@ -429,70 +591,6 @@ const SourceOptimizationPage = () => {
                   step="0.001"
                 />
               </div>
-            </div>
-          </div>
-
-          {/* Hydrogen System Parameters */}
-          <div className={sectionPanelClass}>
-            <h3 className="text-lg font-semibold mb-4">Hydrogen System Parameters</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Electrolyzer Capacity (kW)</span>
-                </label>
-                <input
-                  type="number"
-                  name="electrolyzer_capacity"
-                  value={formData.electrolyzer_capacity}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  step="10"
-                />
-              </div>
-
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Fuel Cell Capacity (kW)</span>
-                </label>
-                <input
-                  type="number"
-                  name="fuel_cell_capacity"
-                  value={formData.fuel_cell_capacity}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  step="10"
-                />
-              </div>
-
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>H2 Tank Capacity (kg)</span>
-                </label>
-                <input
-                  type="number"
-                  name="h2_tank_capacity"
-                  value={formData.h2_tank_capacity}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  step="1"
-                />
-              </div>
-
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Fuel Cell Efficiency (0-1)</span>
-                </label>
-                <input
-                  type="number"
-                  name="fuel_cell_efficiency_percent"
-                  value={formData.fuel_cell_efficiency_percent}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  step="0.01"
-                  min="0"
-                  max="1"
-                />
-              </div>
 
               <div className={controlWrapperClass}>
                 <label className="label">
@@ -543,10 +641,10 @@ const SourceOptimizationPage = () => {
             </div>
           </div>
 
-          <div className="flex justify-center mt-8">
+          <div className="flex justify-center pt-4">
             <button
               onClick={handleSubmit}
-              className="btn btn-primary rounded-xl px-8 py-3 text-lg shadow-md"
+              className="btn h-12 min-h-12 rounded-2xl border-none bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 px-10 text-base font-semibold text-white shadow-lg shadow-indigo-300/40 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
               disabled={loading}
             >
               {loading ? "Optimizing..." : "Run Optimization"}
@@ -558,53 +656,27 @@ const SourceOptimizationPage = () => {
       {response && (
         <div className="space-y-8">
           {/* Optimization Summary */}
-          <div className="card bg-base-100 shadow-xl">
-            <div className="card-body space-y-6">
-              <div>
-                <h3 className="card-title text-xl font-semibold">
-                  Optimization Snapshot
-                </h3>
-                <p className="text-sm text-gray-500">
-                  Weather:{" "}
-                  <span className="font-medium">
-                    {response.summary.Weather}
-                  </span>{" "}
-                  • Profile:{" "}
-                  <span className="font-medium">
-                    {response.summary.Notes?.Profile_Type}
-                  </span>
-                </p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {keyMetrics.map((metric) => (
-                  <div
-                    key={metric.title}
-                    className="rounded-xl border border-base-200 p-4 bg-base-200/60"
-                  >
-                    <p className="text-sm text-gray-500">{metric.title}</p>
-                    <p className="text-2xl font-semibold mt-2">
-                      {metric.value}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {metric.subtext}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
           {plotUrl && (
-            <div className="card bg-base-100 shadow-xl">
-              <div className="card-body space-y-4">
-                <h3 className="card-title text-xl font-semibold">
-                  Optimization Results Visualization
-                </h3>
+            <div className="rounded-3xl border border-base-200/70 bg-base-100/95 shadow-xl shadow-purple-100/40">
+              <div className="space-y-4 p-6 md:p-8">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[0.6rem] font-semibold uppercase tracking-[0.4em] text-purple-500/80">
+                      Dispatch Charts
+                    </p>
+                    <h3 className="mt-2 text-xl font-semibold text-base-content md:text-2xl">
+                      Optimization Results Visualization
+                    </h3>
+                  </div>
+                  <span className="rounded-full border border-purple-400/30 bg-purple-50 px-4 py-1 text-xs font-semibold text-purple-600">
+                    High-level summary plot
+                  </span>
+                </div>
                 <div className="flex justify-center overflow-x-auto">
                   <img
                     src={plotUrl}
                     alt="Optimization Results"
-                    className="max-w-full rounded-lg shadow-md"
+                    className="max-w-full rounded-2xl shadow-lg"
                   />
                 </div>
               </div>
@@ -613,11 +685,21 @@ const SourceOptimizationPage = () => {
 
           {/* Energy Mix Visualization */}
           {chartData.length > 0 && (
-            <div className="card bg-base-100 shadow-xl">
-              <div className="card-body space-y-4">
-                <h3 className="card-title text-xl font-semibold">
-                  Energy Mix Over Time
-                </h3>
+            <div className="card overflow-hidden rounded-3xl border border-base-200/70 bg-base-100/95 shadow-xl shadow-sky-100/30">
+              <div className="space-y-4 p-6 md:p-8">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[0.6rem] font-semibold uppercase tracking-[0.4em] text-sky-500/80">
+                      Dispatch Detail
+                    </p>
+                    <h3 className="mt-2 text-xl font-semibold text-base-content md:text-2xl">
+                      Energy Mix Over Time
+                    </h3>
+                  </div>
+                  <span className="rounded-full border border-sky-400/30 bg-sky-50 px-4 py-1 text-xs font-semibold text-sky-600">
+                    {chartData.length} intervals
+                  </span>
+                </div>
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData}>
@@ -689,19 +771,29 @@ const SourceOptimizationPage = () => {
 
           {/* Cost Breakdown */}
           {formattedBreakdown.length > 0 && (
-            <div className="card bg-base-100 shadow-xl">
-              <div className="card-body space-y-4">
-                <h3 className="card-title text-xl font-semibold">
-                  Cost Breakdown
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="rounded-3xl border border-base-200/70 bg-base-100/95 shadow-xl shadow-emerald-100/40">
+              <div className="space-y-4 p-6 md:p-8">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-[0.6rem] font-semibold uppercase tracking-[0.4em] text-emerald-500/80">
+                      Cost Analytics
+                    </p>
+                    <h3 className="mt-2 text-xl font-semibold text-base-content md:text-2xl">
+                      Cost Breakdown
+                    </h3>
+                  </div>
+                  <div className="rounded-full border border-emerald-400/30 bg-emerald-50 px-4 py-1 text-xs font-semibold text-emerald-600">
+                    {formatCurrency(summary?.Costs?.TOTAL_COST_INR)}
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                   {formattedBreakdown.map((item) => (
                     <div
                       key={item.label}
-                      className="p-4 rounded-lg bg-base-200/70 border border-base-200"
+                      className="rounded-2xl border border-base-200/70 bg-base-200/70 p-4 shadow-inner"
                     >
-                      <p className="text-sm text-gray-500">{item.label}</p>
-                      <p className="text-xl font-semibold mt-2">
+                      <p className="text-sm text-base-content/60">{item.label}</p>
+                      <p className="mt-2 text-xl font-semibold text-base-content">
                         ₹{item.value}
                       </p>
                     </div>
@@ -711,12 +803,67 @@ const SourceOptimizationPage = () => {
             </div>
           )}
 
+          <div className="rounded-3xl bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 text-white shadow-2xl ring-1 ring-white/15">
+            <div className="space-y-6 p-6 md:p-8">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-[0.6rem] font-semibold uppercase tracking-[0.45em] text-white/70">
+                    Optimization overview
+                  </p>
+                  <h3 className="mt-2 text-2xl font-semibold md:text-3xl">Source Optimization</h3>
+                  <p className="mt-2 max-w-2xl text-sm text-white/80 md:text-base">
+                    Compare optimized energy dispatch against configured capacities, visualize cross-source
+                    flows, and uncover actionable savings opportunities for your hybrid energy system.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-white/20 bg-white/10 px-5 py-4 text-right shadow-inner backdrop-blur md:text-left">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-white/70">
+                    Current scenario
+                  </p>
+                  <p className="mt-1 text-lg font-semibold capitalize">
+                    {response.summary.Weather} · {response.summary.Notes?.Profile_Type}
+                  </p>
+                  <p className="text-xs text-white/70">
+                    {response.summary.Optimization_Period_days} day{response.summary.Optimization_Period_days > 1 ? "s" : ""} ·{" "}
+                    {response.summary.Resolution_min}-minute resolution
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {keyMetrics.map((metric) => (
+                  <div
+                    key={metric.title}
+                    className={`rounded-2xl bg-gradient-to-br ${metric.accent} p-5 shadow-lg ring-1 ring-white/20`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-white/70">
+                          {metric.title}
+                        </p>
+                        <p className="mt-3 text-2xl font-semibold text-white md:text-3xl">
+                          {metric.value}
+                        </p>
+                        <p className="mt-2 text-sm text-white/80">{metric.subtext}</p>
+                      </div>
+                      <metric.icon className="h-8 w-8 shrink-0 text-white/85" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Key Insights */}
-          <div className="card bg-base-100 shadow-xl">
-            <div className="card-body">
-              <h3 className="card-title text-xl font-semibold">
-                Key Insights
-              </h3>
+          <div className="rounded-3xl border border-base-200/70 bg-base-100/95 shadow-xl shadow-primary/10">
+            <div className="space-y-4 p-6 md:p-8">
+              <div>
+                <p className="text-[0.6rem] font-semibold uppercase tracking-[0.4em] text-primary/70">
+                  Narrative Summary
+                </p>
+                <h3 className="mt-2 text-xl font-semibold text-base-content md:text-2xl">
+                  Key Insights
+                </h3>
+              </div>
               <div className="space-y-4">
                 <div className="alert alert-info">
                   <div>
