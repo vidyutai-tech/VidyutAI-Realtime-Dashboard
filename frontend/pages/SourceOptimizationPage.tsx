@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect, useMemo } from "react";
+import { useContext, useState, useEffect, useMemo, useRef } from "react";
 import { AppContext } from "../contexts/AppContext";
 import axios from "axios";
 import { Snackbar, Alert } from "@mui/material";
@@ -26,6 +26,8 @@ const SourceOptimizationPage = () => {
   const { currentUser } = useContext(AppContext)!;
   const [formData, setFormData] = useState({
     weather: "Sunny",
+    objective_type: "cost",
+    selected_source: "",
     num_days: 2,
     time_resolution_minutes: 30,
     grid_connection: 2000,
@@ -52,6 +54,10 @@ const SourceOptimizationPage = () => {
   const [open, setOpen] = useState(false);
   const [chartData, setChartData] = useState<any[]>([]);
   const [plotUrl, setPlotUrl] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const AI_BASE_URL = (import.meta as any).env?.VITE_AI_BASE_URL || "http://localhost:8000";
+  const OPTIMIZE_URL = `${AI_BASE_URL}/api/v1/optimize`;
 
   const controlWrapperClass = "form-control space-y-2";
   const labelClass = "label-text text-xs font-semibold tracking-wide text-base-content/60";
@@ -136,6 +142,19 @@ const SourceOptimizationPage = () => {
   };
 
   const handleSubmit = async () => {
+    // Basic client-side validation for common inputs
+    const validResolutions = [15, 30, 60];
+    if (!validResolutions.includes(Number(formData.time_resolution_minutes))) {
+      setError("Time resolution must be 15, 30, or 60 minutes");
+      setOpen(true);
+      return;
+    }
+    if (formData.num_days < 1 || formData.num_days > 30) {
+      setError("Number of days must be between 1 and 30");
+      setOpen(true);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setOpen(false);
@@ -146,6 +165,13 @@ const SourceOptimizationPage = () => {
       if (!token) {
         throw new Error("Not authenticated");
       }
+
+      // Cancel any in-flight request before starting a new one
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
       // Create FormData for file upload
       const formDataToSend = new FormData();
@@ -162,15 +188,21 @@ const SourceOptimizationPage = () => {
         }
       });
 
+      // If single-source selected, ensure selected_source is sent cleanly; otherwise drop it
+      if ((formData as any).objective_type !== 'single_source') {
+        formDataToSend.set('selected_source', '');
+      }
+
       // Call the Python API
       const res = await axios.post(
-        "http://localhost:8000/api/v1/optimize",
+        OPTIMIZE_URL,
         formDataToSend,
         {
           headers: {
             'Content-Type': 'multipart/form-data',
             'Authorization': `Bearer ${token}`,
           },
+          signal: controller.signal,
         }
       );
 
@@ -192,6 +224,10 @@ const SourceOptimizationPage = () => {
       }
 
     } catch (err: any) {
+      if (axios.isCancel && axios.isCancel(err)) {
+        // Swallow cancellation errors
+        return;
+      }
       if (err.response?.data?.message) {
         setError(err.response.data.message);
       } else {
@@ -206,6 +242,14 @@ const SourceOptimizationPage = () => {
   const handleClose = () => {
     setOpen(false);
   };
+
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   const summary = response?.summary;
   const displayWeather = summary?.Weather ?? formData.weather;
@@ -631,13 +675,59 @@ const SourceOptimizationPage = () => {
               </label>
               <input
                 type="file"
-                accept=".csv"
+                accept=".csv,.xlsx"
                 onChange={handleFileUpload}
                 className={fileInputClass}
               />
               <label className="label">
-                <span className="label-text-alt">CSV should have 'Load' and 'Price' columns</span>
+                <span className="label-text-alt">CSV/XLSX should have 'Load', 'Price', and optional 'Solar/PV' columns</span>
               </label>
+            </div>
+          </div>
+
+          {/* Objective Selection */}
+          <div className={sectionPanelClass}>
+            <h3 className="text-lg font-semibold mb-4">Objective</h3>
+            <div className="flex flex-col gap-4">
+              <div className={controlWrapperClass}>
+                <label className="label">
+                  <span className={labelClass}>Optimization Objective</span>
+                </label>
+                <select
+                  name="objective_type"
+                  value={(formData as any).objective_type}
+                  onChange={handleInputChange}
+                  className={selectClass}
+                >
+                  <option value="cost">Minimize Cost</option>
+                  <option value="co2">Minimize CO2 Emissions</option>
+                  <option value="single_source">Use Only One Source</option>
+                </select>
+              </div>
+
+              {(formData as any).objective_type === 'single_source' && (
+                <div className={controlWrapperClass}>
+                  <label className="label">
+                    <span className={labelClass}>Selected Source</span>
+                  </label>
+                  <select
+                    name="selected_source"
+                    value={(formData as any).selected_source}
+                    onChange={handleInputChange}
+                    className={selectClass}
+                  >
+                    <option value="">Choose source…</option>
+                    <option value="grid">Grid</option>
+                    <option value="diesel">Diesel</option>
+                    <option value="solar">Solar PV</option>
+                    <option value="battery">Battery (discharge only)</option>
+                    <option value="fuel_cell">Fuel Cell (H2)</option>
+                  </select>
+                  <label className="label">
+                    <span className="label-text-alt">All other supply sources will be set to zero; model will minimize curtailment.</span>
+                  </label>
+                </div>
+              )}
             </div>
           </div>
 

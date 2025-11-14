@@ -219,7 +219,7 @@ Your browser should automatically open to the dashboard!
 The AI service provides machine learning predictions. The backend will work without it using mock data.
 
 ```bash
-# Navigate to ai-service folder
+# Navigate to ai-senpm rvice folder
 cd ai-service
 
 # Activate virtual environment

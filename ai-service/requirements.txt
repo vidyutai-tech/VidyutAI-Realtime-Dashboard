@@ -6,10 +6,16 @@ pydantic[email]
 python-jose[cryptography]
 passlib==1.7.4
 python-dotenv
-tensorflow
+# TensorFlow: Python 3.11 or 3.12 recommended. For Python 3.14, use: pip install tensorflow --pre
+# If the above fails, try: tensorflow-cpu>=2.15.0
+tensorflow>=2.15.0,<2.18.0
 scikit-learn
 pandas
+numpy
 bcrypt==3.2.0
 stable-baselines3[extra]
 pydantic_settings
 langchain_openai
+# Source Optimization dependencies
+pulp
+matplotlib

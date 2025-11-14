@@ -1,5 +1,14 @@
 import { HealthStatus, Alert, MaintenanceAsset, Site, RLStrategy, DigitalTwinDataPoint, Anomaly, AIQuery, RLSuggestion } from '../types';
-const API_BASE_URL = 'http://localhost:3000/api/v1';
+declare global {
+  interface ImportMeta {
+    env: {
+      VITE_API_BASE_URL?: string;
+      [key: string]: string | undefined;
+    };
+  }
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
 
 // --- Helper for Auth Headers ---
 const getAuthHeaders = (): HeadersInit => {

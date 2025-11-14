@@ -5,6 +5,7 @@ const morgan = require('morgan');
 const http = require('http');
 const socketIo = require('socket.io');
 require('dotenv').config();
+const { ensureInitialized } = require('./database/db');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -19,6 +20,9 @@ const actionsRoutes = require('./routes/actions');
 // Initialize Express app
 const app = express();
 const server = http.createServer(app);
+
+// Ensure database is initialized (tables + seed) before routes
+ensureInitialized();
 
 // Initialize Socket.IO
 const io = socketIo(server, {
@@ -158,7 +162,7 @@ app.use((req, res) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Backend server running on port ${PORT}`);
   console.log(`📊 API: http://localhost:${PORT}/api/v1`);

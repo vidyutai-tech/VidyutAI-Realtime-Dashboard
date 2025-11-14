@@ -111,6 +111,36 @@ function getDatabase() {
   return db;
 }
 
+// Check if a table exists
+function tableExists(tableName) {
+  const database = getDatabase();
+  const row = database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name = ?").get(tableName);
+  return !!row;
+}
+
+// Determine if the core schema has been created
+function isInitialized() {
+  try {
+    return tableExists('users') && tableExists('sites') && tableExists('assets');
+  } catch (e) {
+    return false;
+  }
+}
+
+// Ensure database is initialized; if not, run full setup once
+function ensureInitialized() {
+  initializeDatabase();
+  if (!isInitialized()) {
+    console.log('🗄️ Database not initialized. Running setup...');
+    createTables();
+    seedDatabase();
+    insertTimeseriesData();
+    console.log('🗄️ Database initialization finished.');
+  } else {
+    console.log('🗄️ Database already initialized.');
+  }
+}
+
 function closeDatabase() {
   if (db) {
     db.close();
@@ -133,6 +163,8 @@ module.exports = {
   setupDatabase,
   getDatabase,
   closeDatabase,
-  initializeDatabase
+  initializeDatabase,
+  ensureInitialized,
+  isInitialized
 };
 
