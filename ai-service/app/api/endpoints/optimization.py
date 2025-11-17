@@ -31,7 +31,7 @@ def upsample_profile(hourly_profile, steps_per_hour, num_days):
     return upsampled_single_day * num_days
 
 
-"""MILP-based optimizer aligned with the notebook.
+"""MILP-based optimizer aligned with the  .
 Models grid import/export, diesel with min-power on/off, battery charge/discharge with SOC,
 PV curtailment, and a simple hydrogen loop (electrolyzer piecewise efficiency + fuel cell).
 Returns a detailed summary and a combined dispatch plot.
@@ -74,10 +74,10 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
     except (ValueError, TypeError, KeyError) as e:
         raise ValueError(f"Invalid input parameters: {str(e)}")
 
-    # Battery capacity: API receives Wh, convert to Ah for notebook compatibility
+    # Battery capacity: API receives Wh, convert to Ah for   compatibility
     battery_capacity_ah = battery_capacity_wh / battery_voltage  # Ah
 
-    # Weather → solar scaling (matching notebook)
+    # Weather → solar scaling (matching  )
     wl = str(weather).lower()
     if wl == "sunny":
         solar_scale = 1.0
@@ -95,7 +95,7 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
     steps_per_hour = int(60 / time_resolution_minutes)
     time_horizon = num_days * 24 * steps_per_hour
 
-    # Solar profiles (matching notebook exactly)
+    # Solar profiles (matching   exactly)
     solar_profile_sunny = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.05, 0.2, 0.4, 0.6, 0.8, 0.9,
                            1.0, 0.95, 0.85, 0.7, 0.5, 0.25, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0]
     solar_profile_cloudy = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.03, 0.15, 0.3, 0.45, 0.6, 0.65,
@@ -133,11 +133,11 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
     else:
         solar_profile = upsample_profile(solar_profile_base, steps_per_hour, num_days)
 
-    # System capacities / derived values (matching notebook exactly)
+    # System capacities / derived values (matching   exactly)
     grid_max_power = grid_connection
     solar_capacity = solar_connection
     battery_storage_energy = battery_capacity_wh / 1000.0  # Convert Wh to kWh
-    battery_power = battery_storage_energy * 0.5  # kW, 0.5C rate as in notebook
+    battery_power = battery_storage_energy * 0.5  # kW, 0.5C rate as in  
     bess_charge_capacity = battery_power
     bess_discharge_capacity = battery_power
     bess_energy_capacity = battery_storage_energy
@@ -275,10 +275,11 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
         # Prevent negative grid (export) to keep emissions linear and meaningful
         for t in T:
             model += P_grid[t] >= 0, f"grid_nonneg_co2_{t}"
+            p_grid_import = max(0, P_grid[t])  # only contain the positive value of p_grid | otherwise 0
 
         objective_expr = lpSum([
             step_size * (
-                ef_tco2_per_kwh["grid"] * P_grid[t]
+                ef_tco2_per_kwh["grid"] * p_grid_import[t]
                 + ef_tco2_per_kwh["diesel"] * P_diesel[t]
                 + ef_tco2_per_kwh["solar"] * P_pv_used[t]
                 + ef_tco2_per_kwh["battery"] * P_discharge[t]
@@ -316,10 +317,10 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
         print("Using bundled CBC solver")
     model.solve(solver)
 
-    # Gather results (matching notebook structure exactly)
+    # Gather results (matching   structure exactly)
     time_hours = [t * step_size for t in T]
     
-    # Calculate H2 levels at end of each time step (for plotting, matching notebook)
+    # Calculate H2 levels at end of each time step (for plotting, matching  )
     h2_levels_for_plot = []
     for t in T:
         h2_at_end_of_t = value(E_h2[t]) + value(H_produced[t]) * step_size - value(P_fc[t]) * step_size * fc_conversion_rate
@@ -352,7 +353,7 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
         'H2_Produced_kg': [value(H_produced[t]) for t in T]  # H2 produced per time step
     }
 
-    # Aggregates (matching notebook calculations)
+    # Aggregates (matching   calculations)
     total_load = sum(load_profile) * step_size
     total_served = total_load - sum(results['Load_Curtailed']) * step_size
     grid_import = sum(max(0.0, p) for p in results['Grid_Power']) * step_size
@@ -365,7 +366,7 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
     total_discharge = sum(results['Discharge_Power']) * step_size
     battery_om_total = total_discharge * battery_om_cost
     
-    # Hydrogen system totals (matching notebook calculations)
+    # Hydrogen system totals (matching   calculations)
     total_h2_produced_kwh_input = sum(results['Electrolyzer_Power']) * step_size
     total_h2_produced_kg = sum(results['H2_Produced_kg']) * step_size
     total_h2_consumed_kwh_output = sum(results['Fuel_Cell_Power']) * step_size
@@ -374,7 +375,7 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
     electrolyzer_om_total = total_h2_produced_kwh_input * electrolyzer_om_cost
     round_trip_efficiency_h2 = (total_h2_consumed_kwh_output / total_h2_produced_kwh_input * 100) if total_h2_produced_kwh_input > 0 else 0
     
-    # Cost calculations (matching notebook)
+    # Cost calculations (matching  )
     grid_cost = sum(max(0.0, results['Grid_Power'][t]) * price_profile[t] * step_size for t in range(time_horizon))
     pv_cost = total_pv_used * pv_energy_cost
     total_cost_value = value(model.objective)
@@ -460,7 +461,7 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
         "Emissions": emissions
     }
 
-    # Generate all plots (matching notebook exactly)
+    # Generate all plots (matching   exactly)
     plt.style.use('seaborn-v0_8-whitegrid')
     plt.rcParams.update({'font.size': 14, 'font.family': 'serif', 'axes.labelweight': 'bold', 'axes.titleweight': 'bold'})
     colors = {'load': "#010103", 'grid': "#0863D1", 'diesel': "#72394F", 'battery': "#8938F3", 'solar': "#6BF520", 'h2': "#17becf", 'price': "#CA3510", 'cost': "#25E8F3"}
@@ -582,7 +583,7 @@ async def optimize(
     - Automatically infers duration (days) from uploaded file
     - Returns JSON summary + Base64-encoded plot in one response
     """
-    # Default 24-hour profiles (fallback - matching notebook)
+    # Default 24-hour profiles (fallback - matching  )
     load_profile = [800, 750, 700, 650, 600, 650, 750, 850, 950, 1100, 1200, 1300,
                     1250, 1200, 1150, 1200, 1300, 1400, 1500, 1450, 1300, 1150, 1000, 900]
     price_profile = [3.5, 3.2, 3.0, 2.8, 2.5, 2.8, 4.2, 5.5, 6.2, 7.8, 8.5,
