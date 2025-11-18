@@ -55,7 +55,6 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
         battery_om_cost = max(0, float(params["battery_om_cost"]))  # INR/kWh
         weather = str(params["weather"]).lower()
         objective_type = str(params.get("objective_type", "cost")).lower()
-        selected_source = params.get("selected_source")
         
         # Hydrogen system parameters (with defaults if not provided)
         electrolyzer_capacity = max(0, float(params.get("electrolyzer_capacity", 1000.0)))  # kW
@@ -192,6 +191,7 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
     P_elec_s2 = {t: LpVariable(f"P_elec_s2_{t}", 0, width_s2) for t in T}
     z_elec_s2 = {t: LpVariable(f"z_elec_s2_{t}", cat='Binary') for t in T}
     H_produced = {t: LpVariable(f"H_produced_{t}", 0) for t in T}
+    P_grid_import = {t: LpVariable(f"P_grid_import_{t}", 0) for t in T}
 
     # Constraints
     for t in T:
@@ -200,6 +200,9 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
         supply = P_pv_used[t] + P_diesel[t] + P_discharge[t] + P_grid[t] + P_fc[t]
         demand = load_served + P_charge[t] + P_elec[t]
         model += (supply == demand), f"power_balance_{t}"
+
+    for t in T:
+        model += P_load_curt[t] <= load_profile[t], f"load_curt_max_{t}"
 
     for t in T:
         # PV balance and curtailment
@@ -245,57 +248,40 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
         E_h2[0] == E_h2[time_horizon-1] + H_produced[time_horizon-1] * step_size - (P_fc[time_horizon-1] * step_size * fc_conversion_rate)
     ), "h2_cyclic"
 
-    # Optional single-source selection: force all other supply terms to zero
-    if objective_type == "single_source" and selected_source:
-        allowed = str(selected_source).lower()
-        for t in T:
-            if allowed != "solar":
-                model += P_pv_used[t] == 0, f"single_src_no_solar_{t}"
-            if allowed != "diesel":
-                model += P_diesel[t] == 0, f"single_src_no_diesel_{t}"
-            if allowed != "battery":
-                model += P_discharge[t] == 0, f"single_src_no_bess_{t}"
-            if allowed != "grid":
-                model += P_grid[t] == 0, f"single_src_no_grid_{t}"
-            if allowed != "fuel_cell":
-                model += P_fc[t] == 0, f"single_src_no_fc_{t}"
+    for t in T:
+        model += P_grid_import[t] >= P_grid[t], f"grid_import_ge_pgrid_{t}"
+        model += P_grid_import[t] >= 0, f"grid_import_ge_0_{t}"
 
-    # Objective selection
-    # Emission factors (tCO2/MWh) and conversion to tCO2/kWh
-    emission_factors_tco2_per_mwh = {
+
+    co2_kg_per_kwh = {
         "grid": 0.716,
-        "diesel": 0.80,  # median within 0.53–1.00
-        "solar": 0.048,
-        "battery": 0.05,  # LCA overhead per kWh discharged
-        "fuel_cell": 0.10  # placeholder; configurable in future
+        "diesel": 0.9,
+        "battery": 0.029,
+        "solar": 0.046,
+        "fuel_cell": 0.001,
+        "electrolyzer": 0.0,
     }
-    ef_tco2_per_kwh = {k: v / 1000.0 for k, v in emission_factors_tco2_per_mwh.items()}
+    co2_load_curt_penalty = 5.0
 
     if objective_type == "co2":
-        # Prevent negative grid (export) to keep emissions linear and meaningful
-        for t in T:
-            model += P_grid[t] >= 0, f"grid_nonneg_co2_{t}"
-            p_grid_import = max(0, P_grid[t])  # only contain the positive value of p_grid | otherwise 0
-
         objective_expr = lpSum([
             step_size * (
-                ef_tco2_per_kwh["grid"] * p_grid_import[t]
-                + ef_tco2_per_kwh["diesel"] * P_diesel[t]
-                + ef_tco2_per_kwh["solar"] * P_pv_used[t]
-                + ef_tco2_per_kwh["battery"] * P_discharge[t]
-                + ef_tco2_per_kwh["fuel_cell"] * P_fc[t]
+                co2_kg_per_kwh["grid"] * P_grid_import[t]
+                + co2_kg_per_kwh["diesel"] * P_diesel[t]
+                + co2_kg_per_kwh["battery"] * P_discharge[t]
+                + co2_kg_per_kwh["solar"] * P_pv_used[t]
+                + co2_kg_per_kwh["fuel_cell"] * P_fc[t]
+                + co2_kg_per_kwh["electrolyzer"] * P_elec[t]
             )
+            + step_size * co2_load_curt_penalty * P_load_curt[t]
             for t in T
         ])
-    elif objective_type == "single_source":
-        # Minimize curtailment only (irrespective of cost or CO2)
-        objective_expr = lpSum([P_load_curt[t] for t in T])
     else:
         # Default: minimize total operating cost
         objective_expr = lpSum([
             step_size * price_profile[t] * P_grid[t]
             + step_size * load_curtail_cost * P_load_curt[t]
-            + fuel_price * F_diesel[t]
+            + step_size * fuel_price * F_diesel[t]
             + step_size * pv_energy_cost * P_pv_used[t]
             + step_size * battery_om_cost * P_discharge[t]
             + step_size * fuel_cell_om_cost * P_fc[t]
@@ -332,10 +318,11 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
         'Load_Demand': load_profile,
         'Price': price_profile,
         'Grid_Power': [value(P_grid[t]) for t in T],
+        'Grid_Import': [value(P_grid_import[t]) for t in T],
         'Load_Curtailed': [value(P_load_curt[t]) for t in T],
         'Diesel_Power': [value(P_diesel[t]) for t in T],
-        'Fuel_Use_l': [value(F_diesel[t]) for t in T],  # Fuel consumption in liters per time step
-        'Fuel_Cost': [fuel_price * value(F_diesel[t]) for t in T],  # Fuel cost per time step
+        'Fuel_Use_l': [step_size * value(F_diesel[t]) for t in T],
+        'Fuel_Cost': [step_size * fuel_price * value(F_diesel[t]) for t in T],
         'Charge_Power': [value(P_charge[t]) for t in T],
         'Discharge_Power': [value(P_discharge[t]) for t in T],
         'Net_Battery_Power': [value(P_discharge[t]) - value(P_charge[t]) for t in T],
@@ -356,10 +343,10 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
     # Aggregates (matching   calculations)
     total_load = sum(load_profile) * step_size
     total_served = total_load - sum(results['Load_Curtailed']) * step_size
-    grid_import = sum(max(0.0, p) for p in results['Grid_Power']) * step_size
+    grid_import = sum(results['Grid_Import']) * step_size
     grid_export = sum(max(0.0, -p) for p in results['Grid_Power']) * step_size
     diesel_energy = sum(results['Diesel_Power']) * step_size
-    fuel_cost_total = sum(results['Fuel_Use_l']) * fuel_price
+    fuel_cost_total = sum(results['Fuel_Cost'])
     total_pv_used = sum(results['PV_Used']) * step_size
     total_pv_avail = sum(results['Solar_Available']) * step_size
     total_charge = sum(results['Charge_Power']) * step_size
@@ -378,22 +365,24 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
     # Cost calculations (matching  )
     grid_cost = sum(max(0.0, results['Grid_Power'][t]) * price_profile[t] * step_size for t in range(time_horizon))
     pv_cost = total_pv_used * pv_energy_cost
-    total_cost_value = value(model.objective)
+    curtail_kwh = sum(results['Load_Curtailed']) * step_size
+    curtail_cost_total = curtail_kwh * load_curtail_cost
+    total_cost_value = grid_cost + pv_cost + battery_om_total + fuel_cost_total + fuel_cell_om_total + electrolyzer_om_total + curtail_cost_total
     cost_per_kwh = (total_cost_value / total_served) if total_served > 0 else 0
 
     # Emissions summary (tCO2), computed from positive flows and life-cycle proxies
     emissions = {}
     try:
-        grid_ef = ef_tco2_per_kwh["grid"]
-        diesel_ef = ef_tco2_per_kwh["diesel"]
-        solar_ef = ef_tco2_per_kwh["solar"]
-        battery_ef = ef_tco2_per_kwh["battery"]
-        fc_ef = ef_tco2_per_kwh["fuel_cell"]
-        grid_emissions_t = grid_import * grid_ef
-        diesel_emissions_t = diesel_energy * diesel_ef
-        solar_emissions_t = total_pv_used * solar_ef
-        battery_emissions_t = total_discharge * battery_ef
-        fc_emissions_t = total_h2_consumed_kwh_output * fc_ef
+        grid_ef_kg = co2_kg_per_kwh["grid"]
+        diesel_ef_kg = co2_kg_per_kwh["diesel"]
+        solar_ef_kg = co2_kg_per_kwh["solar"]
+        battery_ef_kg = co2_kg_per_kwh["battery"]
+        fc_ef_kg = co2_kg_per_kwh["fuel_cell"]
+        grid_emissions_t = (grid_import * grid_ef_kg) / 1000.0
+        diesel_emissions_t = (diesel_energy * diesel_ef_kg) / 1000.0
+        solar_emissions_t = (total_pv_used * solar_ef_kg) / 1000.0
+        battery_emissions_t = (total_discharge * battery_ef_kg) / 1000.0
+        fc_emissions_t = (total_h2_consumed_kwh_output * fc_ef_kg) / 1000.0
         total_emissions_t = grid_emissions_t + diesel_emissions_t + solar_emissions_t + battery_emissions_t + fc_emissions_t
         emissions = {
             "Total_CO2_t": round(total_emissions_t, 4),
@@ -413,7 +402,6 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
         "Resolution_min": time_resolution_minutes,
         "Weather": weather,
         "Objective": objective_type,
-        "Selected_Source": selected_source,
         "Load": {
             "Total_Demand_kWh": round(total_load, 2),
             "Total_Served_kWh": round(total_served, 2),
@@ -455,6 +443,7 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
             "Battery_OM_Cost_INR": round(battery_om_total, 2),
             "Fuel_Cell_OM_Cost_INR": round(fuel_cell_om_total, 2),
             "Electrolyzer_OM_Cost_INR": round(electrolyzer_om_total, 2),
+            "Curtailment_Cost_INR": round(curtail_cost_total, 2),
             "TOTAL_COST_INR": round(total_cost_value, 2),
             "Cost_per_kWh_INR": round(cost_per_kwh, 2),
         },
@@ -557,7 +546,6 @@ async def optimize(
     profile_type: str = Form("Auto detect"),
     weather: str = Form("Sunny"),
     objective_type: str = Form("cost"),
-    selected_source: Optional[str] = Form(None),
     num_days: int = Form(2),
     time_resolution_minutes: int = Form(30),
     grid_connection: float = Form(2000),
@@ -661,15 +649,14 @@ async def optimize(
         "fuel_price": fuel_price,
         "pv_energy_cost": pv_energy_cost,
         "load_curtail_cost": load_curtail_cost,
-    "battery_om_cost": battery_om_cost,
-    "weather": weather,
-    "objective_type": objective_type,
-    "selected_source": selected_source,
-    "electrolyzer_capacity": electrolyzer_capacity,
-    "fuel_cell_capacity": fuel_cell_capacity,
-    "h2_tank_capacity": h2_tank_capacity,
-    "fuel_cell_efficiency_percent": fuel_cell_efficiency_percent,
-    "fuel_cell_om_cost": fuel_cell_om_cost,
+        "battery_om_cost": battery_om_cost,
+        "weather": weather,
+        "objective_type": objective_type,
+        "electrolyzer_capacity": electrolyzer_capacity,
+        "fuel_cell_capacity": fuel_cell_capacity,
+        "h2_tank_capacity": h2_tank_capacity,
+        "fuel_cell_efficiency_percent": fuel_cell_efficiency_percent,
+        "fuel_cell_om_cost": fuel_cell_om_cost,
         "electrolyzer_om_cost": electrolyzer_om_cost
     }
 
