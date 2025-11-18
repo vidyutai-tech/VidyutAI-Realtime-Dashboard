@@ -27,7 +27,6 @@ const SourceOptimizationPage = () => {
   const [formData, setFormData] = useState({
     weather: "Sunny",
     objective_type: "cost",
-    selected_source: "",
     num_days: 2,
     time_resolution_minutes: 30,
     grid_connection: 2000,
@@ -188,10 +187,7 @@ const SourceOptimizationPage = () => {
         }
       });
 
-      // If single-source selected, ensure selected_source is sent cleanly; otherwise drop it
-      if ((formData as any).objective_type !== 'single_source') {
-        formDataToSend.set('selected_source', '');
-      }
+      
 
       // Call the Python API
       const res = await axios.post(
@@ -310,6 +306,9 @@ const SourceOptimizationPage = () => {
     }
 
     const costPerKwh = summary.Costs?.Cost_per_kWh_INR;
+    const totalCO2t = summary.Emissions?.Total_CO2_t;
+    const servedKWh = summary.Load?.Total_Served_kWh;
+    const co2Intensity = servedKWh && totalCO2t ? (Number(totalCO2t) * 1000) / Number(servedKWh) : null;
     return [
       {
         title: "Total Optimized Cost",
@@ -338,6 +337,13 @@ const SourceOptimizationPage = () => {
         subtext: `${formatNumber(summary.Battery?.Capacity_kWh)} kWh • ${formatNumber(summary.Battery?.Voltage_V, 0)} V`,
         accent: "from-violet-500 to-purple-500",
         icon: BatteryCharging,
+      },
+      {
+        title: "CO2 Emissions",
+        value: totalCO2t != null ? `${formatNumber(totalCO2t, 2)} tCO2` : "-",
+        subtext: co2Intensity != null ? `${formatNumber(co2Intensity, 2)} kg CO2/kWh` : "Emission intensity",
+        accent: "from-teal-500 to-emerald-500",
+        icon: Leaf,
       },
     ];
   }, [summary, displayWeather, displayDays, displayResolution, displayProfile]);
@@ -701,33 +707,9 @@ const SourceOptimizationPage = () => {
                 >
                   <option value="cost">Minimize Cost</option>
                   <option value="co2">Minimize CO2 Emissions</option>
-                  <option value="single_source">Use Only One Source</option>
                 </select>
               </div>
-
-              {(formData as any).objective_type === 'single_source' && (
-                <div className={controlWrapperClass}>
-                  <label className="label">
-                    <span className={labelClass}>Selected Source</span>
-                  </label>
-                  <select
-                    name="selected_source"
-                    value={(formData as any).selected_source}
-                    onChange={handleInputChange}
-                    className={selectClass}
-                  >
-                    <option value="">Choose source…</option>
-                    <option value="grid">Grid</option>
-                    <option value="diesel">Diesel</option>
-                    <option value="solar">Solar PV</option>
-                    <option value="battery">Battery (discharge only)</option>
-                    <option value="fuel_cell">Fuel Cell (H2)</option>
-                  </select>
-                  <label className="label">
-                    <span className="label-text-alt">All other supply sources will be set to zero; model will minimize curtailment.</span>
-                  </label>
-                </div>
-              )}
+              
             </div>
           </div>
 
@@ -919,7 +901,7 @@ const SourceOptimizationPage = () => {
                   </p>
                 </div>
               </div>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 {keyMetrics.map((metric) => (
                   <div
                     key={metric.title}
