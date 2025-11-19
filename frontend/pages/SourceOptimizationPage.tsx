@@ -481,7 +481,7 @@ const SourceOptimizationPage = () => {
 
                 <div className={controlWrapperClass}>
                   <label className="label">
-                    <span className={labelClass}>Battery Capacity (Ah)</span>
+                    <span className={labelClass}>Battery Capacity (Wh)</span>
                   </label>
                   <input
                     type="number"

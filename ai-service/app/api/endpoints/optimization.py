@@ -13,9 +13,9 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend
 import matplotlib.pyplot as plt
-from pulp import *
+from pulp import lpSum, LpProblem, LpMinimize, LpVariable, COIN_CMD, PULP_CBC_CMD, value, LpStatus, LpStatusOptimal
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_user_optional
 from app.models import pydantic_models as models
 
 router = APIRouter()
@@ -55,6 +55,7 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
         battery_om_cost = max(0, float(params["battery_om_cost"]))  # INR/kWh
         weather = str(params["weather"]).lower()
         objective_type = str(params.get("objective_type", "cost")).lower()
+        profile_type = str(params.get("profile_type", "Auto detect"))
         
         # Hydrogen system parameters (with defaults if not provided)
         electrolyzer_capacity = max(0, float(params.get("electrolyzer_capacity", 1000.0)))  # kW
@@ -255,7 +256,7 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
 
     co2_kg_per_kwh = {
         "grid": 0.716,
-        "diesel": 0.9,
+        "diesel": 0.787, #0.787 kg/kwh
         "battery": 0.029,
         "solar": 0.046,
         "fuel_cell": 0.001,
@@ -263,6 +264,10 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
     }
     co2_load_curt_penalty = 5.0
 
+    # Debug: Print objective type to verify it's being used
+    print(f"🔍 Optimization objective type: '{objective_type}' (normalized from input)")
+    
+    # Determine objective function based on objective type
     if objective_type == "co2":
         objective_expr = lpSum([
             step_size * (
@@ -278,8 +283,9 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
         ])
     else:
         # Default: minimize total operating cost
+        # Use P_grid_import to only count imports as cost (exports don't reduce cost in this model)
         objective_expr = lpSum([
-            step_size * price_profile[t] * P_grid[t]
+            step_size * price_profile[t] * P_grid_import[t]
             + step_size * load_curtail_cost * P_load_curt[t]
             + step_size * fuel_price * F_diesel[t]
             + step_size * pv_energy_cost * P_pv_used[t]
@@ -302,6 +308,15 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
         solver = PULP_CBC_CMD(msg=0, timeLimit=180, gapRel=0.01)
         print("Using bundled CBC solver")
     model.solve(solver)
+    
+    # Check if solution was found
+    if model.status != LpStatusOptimal:
+        status_msg = LpStatus.get(model.status, f"Unknown status {model.status}")
+        error_msg = f"Optimization failed with status: {status_msg}"
+        if objective_type == "co2":
+            error_msg += " (CO2 objective). The problem may be infeasible or unbounded. Check constraints and parameters."
+        print(f"❌ {error_msg}")
+        raise ValueError(error_msg)
 
     # Gather results (matching   structure exactly)
     time_hours = [t * step_size for t in T]
@@ -371,31 +386,41 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
     cost_per_kwh = (total_cost_value / total_served) if total_served > 0 else 0
 
     # Emissions summary (tCO2), computed from positive flows and life-cycle proxies
-    emissions = {}
-    try:
-        grid_ef_kg = co2_kg_per_kwh["grid"]
-        diesel_ef_kg = co2_kg_per_kwh["diesel"]
-        solar_ef_kg = co2_kg_per_kwh["solar"]
-        battery_ef_kg = co2_kg_per_kwh["battery"]
-        fc_ef_kg = co2_kg_per_kwh["fuel_cell"]
-        grid_emissions_t = (grid_import * grid_ef_kg) / 1000.0
-        diesel_emissions_t = (diesel_energy * diesel_ef_kg) / 1000.0
-        solar_emissions_t = (total_pv_used * solar_ef_kg) / 1000.0
-        battery_emissions_t = (total_discharge * battery_ef_kg) / 1000.0
-        fc_emissions_t = (total_h2_consumed_kwh_output * fc_ef_kg) / 1000.0
-        total_emissions_t = grid_emissions_t + diesel_emissions_t + solar_emissions_t + battery_emissions_t + fc_emissions_t
-        emissions = {
-            "Total_CO2_t": round(total_emissions_t, 4),
-            "Breakdown_t": {
-                "Grid": round(grid_emissions_t, 4),
-                "Diesel": round(diesel_emissions_t, 4),
-                "Solar": round(solar_emissions_t, 4),
-                "Battery": round(battery_emissions_t, 4),
-                "Fuel_Cell": round(fc_emissions_t, 4),
-            }
+    # Always calculate emissions - don't use try/except that might hide issues
+    grid_ef_kg = co2_kg_per_kwh["grid"]
+    diesel_ef_kg = co2_kg_per_kwh["diesel"]
+    solar_ef_kg = co2_kg_per_kwh["solar"]
+    battery_ef_kg = co2_kg_per_kwh["battery"]
+    fc_ef_kg = co2_kg_per_kwh["fuel_cell"]
+    
+    # Ensure all values are numeric (they should already be, but be safe)
+    grid_import_val = float(grid_import) if grid_import is not None else 0.0
+    diesel_energy_val = float(diesel_energy) if diesel_energy is not None else 0.0
+    total_pv_used_val = float(total_pv_used) if total_pv_used is not None else 0.0
+    total_discharge_val = float(total_discharge) if total_discharge is not None else 0.0
+    total_h2_consumed_kwh_output_val = float(total_h2_consumed_kwh_output) if total_h2_consumed_kwh_output is not None else 0.0
+    
+    # Calculate emissions in tonnes CO2
+    grid_emissions_t = (grid_import_val * grid_ef_kg) / 1000.0
+    diesel_emissions_t = (diesel_energy_val * diesel_ef_kg) / 1000.0
+    solar_emissions_t = (total_pv_used_val * solar_ef_kg) / 1000.0
+    battery_emissions_t = (total_discharge_val * battery_ef_kg) / 1000.0
+    fc_emissions_t = (total_h2_consumed_kwh_output_val * fc_ef_kg) / 1000.0
+    total_emissions_t = grid_emissions_t + diesel_emissions_t + solar_emissions_t + battery_emissions_t + fc_emissions_t
+    
+    # Always set emissions - never None
+    emissions = {
+        "Total_CO2_t": round(total_emissions_t, 4),
+        "Breakdown_t": {
+            "Grid": round(grid_emissions_t, 4),
+            "Diesel": round(diesel_emissions_t, 4),
+            "Solar": round(solar_emissions_t, 4),
+            "Battery": round(battery_emissions_t, 4),
+            "Fuel_Cell": round(fc_emissions_t, 4),
         }
-    except Exception:
-        emissions = {"Total_CO2_t": None}
+    }
+    
+    print(f"📊 Calculated emissions: Total_CO2_t = {emissions['Total_CO2_t']} tCO2")
 
     summary = {
         "Optimization_Period_days": num_days,
@@ -419,7 +444,9 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
         "Battery": {
             "Charged_kWh": round(total_charge, 2),
             "Discharged_kWh": round(total_discharge, 2), 
-            "OM_Cost_INR": round(battery_om_total, 2)
+            "OM_Cost_INR": round(battery_om_total, 2),
+            "Capacity_kWh": round(battery_storage_energy, 2),
+            "Voltage_V": round(battery_voltage, 2)
         },
         "Solar": {
             "Available_kWh": round(total_pv_avail, 2),
@@ -446,6 +473,18 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
             "Curtailment_Cost_INR": round(curtail_cost_total, 2),
             "TOTAL_COST_INR": round(total_cost_value, 2),
             "Cost_per_kWh_INR": round(cost_per_kwh, 2),
+            "Breakdown": {
+                "Grid": round(grid_cost, 2),
+                "Diesel": round(fuel_cost_total, 2),
+                "PV": round(pv_cost, 2),
+                "Battery": round(battery_om_total, 2),
+                "Fuel_Cell": round(fuel_cell_om_total, 2),
+                "Electrolyzer": round(electrolyzer_om_total, 2),
+                "Curtailment": round(curtail_cost_total, 2)
+            }
+        },
+        "Notes": {
+            "Profile_Type": profile_type
         },
         "Emissions": emissions
     }
@@ -563,7 +602,7 @@ async def optimize(
     fuel_cell_efficiency_percent: float = Form(0.60),
     fuel_cell_om_cost: float = Form(1.5),
     electrolyzer_om_cost: float = Form(0.5),
-    current_user: models.User = Depends(get_current_user)
+    current_user: Optional[models.User] = Depends(get_current_user_optional)
 ):
     """
     Unified EMS optimization endpoint:
@@ -652,6 +691,7 @@ async def optimize(
         "battery_om_cost": battery_om_cost,
         "weather": weather,
         "objective_type": objective_type,
+        "profile_type": profile_type,
         "electrolyzer_capacity": electrolyzer_capacity,
         "fuel_cell_capacity": fuel_cell_capacity,
         "h2_tank_capacity": h2_tank_capacity,
@@ -663,6 +703,12 @@ async def optimize(
     # Run Optimization + Generate Plot
     try:
         summary, plot_bytes, chart_data = run_optimization(params, load_profile, price_profile, solar_profile_input)
+
+        # Debug: Verify emissions are in summary
+        if "Emissions" in summary:
+            print(f"✅ Emissions in summary: {summary['Emissions']}")
+        else:
+            print(f"⚠️ WARNING: Emissions not found in summary! Keys: {list(summary.keys())}")
 
         # Convert image bytes → base64 for direct UI rendering
         plot_base64 = base64.b64encode(plot_bytes).decode("utf-8")

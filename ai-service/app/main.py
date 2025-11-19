@@ -4,6 +4,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.api import api_router
+from app.api.endpoints import optimization
 from app.services.websocket_manager import websocket_handler
 
 # Create FastAPI app instance
@@ -24,6 +25,10 @@ app.add_middleware(
 
 # Include the main API router
 app.include_router(api_router, prefix="/api/v1")
+
+# Include optimization router directly (not through api_router)
+# This allows frontend to call /api/v1/optimize directly
+app.include_router(optimization.router, prefix="/api/v1", tags=["Source Optimization"])
 
 # Define the WebSocket route
 @app.websocket("/ws/site/{site_id}")

@@ -26,6 +26,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Import optimization router
+try:
+    from app.api.endpoints import optimization
+    OPTIMIZATION_AVAILABLE = True
+except ImportError:
+    OPTIMIZATION_AVAILABLE = False
+    logger.warning("Optimization router not available - app.api.endpoints.optimization not found")
+
 # Initialize FastAPI app
 app = FastAPI(
     title="VidyutAI AI Service",
@@ -44,6 +52,11 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(api_router, prefix="/api")
+
+# Include optimization router if available
+if OPTIMIZATION_AVAILABLE:
+    app.include_router(optimization.router, prefix="/api/v1", tags=["Source Optimization"])
+    logger.info("Optimization router registered at /api/v1/optimize")
 
 # Initialize components
 data_processor = None
