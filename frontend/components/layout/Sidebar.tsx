@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, AlertTriangle, AreaChart, Wrench, Bot, SlidersHorizontal, Settings, X, Bolt, Share2, Building, HardDrive, TrendingUp, Zap } from 'lucide-react';
+import { LayoutDashboard, AlertTriangle, AreaChart, Wrench, Bot, SlidersHorizontal, Settings, X, Bolt, Share2, Building, HardDrive, TrendingUp, Zap, Users } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -12,6 +12,7 @@ const mainNavItems = [
   { name: 'Site Detail', path: '/site-detail', icon: AreaChart },
   { name: 'Impact Analysis', path: '/impact', icon: TrendingUp },
   { name: 'Digital Twin', path: '/digital-twin', icon: Share2 },
+  { name: 'Demand Optimization', path: '/demand-optimization', icon: Users },
   { name: 'Source Optimization', path: '/source-optimization', icon: Zap },
   { name: 'Alerts', path: '/alerts', icon: AlertTriangle },
   { name: 'Maintenance', path: '/maintenance', icon: Wrench },
