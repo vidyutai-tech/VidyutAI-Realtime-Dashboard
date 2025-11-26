@@ -55,7 +55,7 @@ const DigitalTwinPage: React.FC = () => {
         };
         
         loadTwinData();
-        const interval = setInterval(loadTwinData, 5000); // Refresh data every 5 seconds
+        const interval = setInterval(loadTwinData, 600000); // Refresh data every 10 minutes
         return () => clearInterval(interval);
 
     }, [selectedAssetId]);
@@ -128,30 +128,30 @@ const DigitalTwinPage: React.FC = () => {
             let possibleCauses: string[] = [];
             let recommendedAction = '';
 
-            if (anomaly.data_point_label.toLowerCase().includes('vibration') || 
-                anomaly.data_point_label.toLowerCase().includes('vib')) {
-                rootCause = `Deviation detected: High vibration (${Math.abs(deviation).toFixed(1)}%) → possible bearing misalignment or fan blockage.`;
+            const label = anomaly.data_point_label || '';
+            const labelLower = label.toLowerCase();
+
+            if (labelLower.includes('vibration') || labelLower.includes('vib')) {
+                rootCause = `Deviation detected: High vibration (${Math.abs(deviation).toFixed(2)}%) → possible bearing misalignment or fan blockage.`;
                 possibleCauses = ['Bearing wear', 'Fan blockage', 'Mechanical imbalance', 'Loose mounting'];
                 recommendedAction = 'Inspect motor bearings and fan assembly. Check for debris or obstructions. Schedule maintenance if deviation persists.';
-            } else if (anomaly.data_point_label.toLowerCase().includes('temp') ||
-                       anomaly.data_point_label.toLowerCase().includes('temperature')) {
-                rootCause = `Temperature anomaly detected (${Math.abs(deviation).toFixed(1)}% deviation) → possible thermal stress or cooling system issue.`;
+            } else if (labelLower.includes('temp') || labelLower.includes('temperature')) {
+                rootCause = `Temperature anomaly detected (${Math.abs(deviation).toFixed(2)}% deviation) → possible thermal stress or cooling system issue.`;
                 possibleCauses = ['Cooling fan failure', 'Thermal paste degradation', 'Ambient temperature spike', 'Heat sink blockage'];
                 recommendedAction = 'Check cooling system operation. Verify ambient conditions. Monitor for thermal runaway.';
-            } else if (anomaly.data_point_label.toLowerCase().includes('current') ||
-                       anomaly.data_point_label.toLowerCase().includes('amp')) {
-                rootCause = `Current deviation (${Math.abs(deviation).toFixed(1)}%) → possible load imbalance or electrical fault.`;
+            } else if (labelLower.includes('current') || labelLower.includes('amp')) {
+                rootCause = `Current deviation (${Math.abs(deviation).toFixed(2)}%) → possible load imbalance or electrical fault.`;
                 possibleCauses = ['Load imbalance', 'Electrical fault', 'Wiring issue', 'Component degradation'];
                 recommendedAction = 'Check electrical connections. Verify load distribution. Inspect for signs of electrical damage.';
             } else {
-                rootCause = `${anomaly.data_point_label} deviation of ${Math.abs(deviation).toFixed(1)}% detected. ${anomaly.message}`;
+                rootCause = `${label || 'Unknown'} deviation of ${Math.abs(deviation).toFixed(2)}% detected. ${anomaly.message || ''}`;
                 possibleCauses = ['Component aging', 'Environmental factors', 'Operational stress', 'Calibration drift'];
                 recommendedAction = 'Review operational parameters. Check calibration. Monitor for trend continuation.';
             }
 
             return {
                 id: anomaly.id,
-                anomalyType: anomaly.data_point_label,
+                anomalyType: label || 'Unknown',
                 severity: anomaly.severity,
                 deviation,
                 detectedAt: anomaly.timestamp,

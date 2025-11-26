@@ -69,7 +69,7 @@ const SituationSummaryStrip: React.FC<SituationSummaryStripProps> = ({
               ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
               : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
           }`}>
-            {batteryLifeImpact.toFixed(1)}% cycle cost
+            {batteryLifeImpact.toFixed(2)}% cycle cost
           </span>
         </div>
 

@@ -117,7 +117,7 @@ const RichDiagnosticCard: React.FC<RichDiagnosticCardProps> = ({
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</p>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-3xl font-bold text-gray-900 dark:text-white">
-                  {value.toFixed(1)}
+                  {value.toFixed(2)}
                 </span>
                 <span className="text-lg text-gray-500 dark:text-gray-400">{unit}</span>
               </div>
@@ -134,7 +134,7 @@ const RichDiagnosticCard: React.FC<RichDiagnosticCardProps> = ({
           {getTrendIcon()}
           <span className="text-gray-600 dark:text-gray-400">
             7-day trend: <span className={`font-semibold ${trend.direction === 'up' ? 'text-green-600' : trend.direction === 'down' ? 'text-red-600' : 'text-gray-600'}`}>
-              {trend.change > 0 ? '+' : ''}{trend.change.toFixed(1)}%
+              {trend.change > 0 ? '+' : ''}{trend.change.toFixed(2)}%
             </span>
           </span>
         </div>
@@ -198,7 +198,7 @@ const RichDiagnosticCard: React.FC<RichDiagnosticCardProps> = ({
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600 dark:text-gray-400">Current Value</span>
                     <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {value.toFixed(1)} {unit}
+                      {value.toFixed(2)} {unit}
                     </span>
                   </div>
                   <div className="flex items-center justify-between mt-2">

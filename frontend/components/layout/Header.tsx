@@ -1,6 +1,6 @@
 import React, { useContext, useState, useEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Menu, Wifi, WifiOff, UserCircle, LogOut, User, ChevronsUpDown, Check, Building } from 'lucide-react';
+import { Menu, Wifi, WifiOff, UserCircle, LogOut, User } from 'lucide-react';
 import { AppContext } from '../../contexts/AppContext';
 
 interface HeaderProps {
@@ -10,17 +10,12 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const context = useContext(AppContext);
   const [isProfileOpen, setProfileOpen] = useState(false);
-  const [isSiteSwitcherOpen, setSiteSwitcherOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
-  const siteSwitcherRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
         setProfileOpen(false);
-      }
-      if (siteSwitcherRef.current && !siteSwitcherRef.current.contains(event.target as Node)) {
-        setSiteSwitcherOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -54,47 +49,10 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
         <div className="hidden md:flex items-center">
           <img src="/Spel.png" alt="SPEL" className="h-10 w-auto" />
         </div>
-        <div className="relative" ref={siteSwitcherRef}>
-            <button 
-                onClick={() => setSiteSwitcherOpen(!isSiteSwitcherOpen)}
-                className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
-            >
-                <h1 className="text-xl font-semibold text-gray-900 dark:text-white">{context?.selectedSite?.name ?? 'No Site Selected'}</h1>
-                <ChevronsUpDown className="w-4 h-4 text-gray-400" />
-            </button>
-            {isSiteSwitcherOpen && (
-                <div className="absolute left-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 z-50">
-                     <ul className="py-1">
-                        {context?.sites.map(site => (
-                             <li key={site.id}>
-                                <button 
-                                    onClick={() => {
-                                        context.selectSite(site);
-                                        setSiteSwitcherOpen(false);
-                                    }}
-                                    className="w-full text-left flex items-center justify-between px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                    <span>{site.name}</span>
-                                    {context.selectedSite?.id === site.id && <Check className="w-4 h-4 text-blue-500"/>}
-                                </button>
-                            </li>
-                        ))}
-                        <li><hr className="my-1 border-gray-200 dark:border-gray-700"/></li>
-                        <li>
-                            <button
-                                onClick={() => {
-                                    context?.selectSite(null);
-                                    setSiteSwitcherOpen(false);
-                                }}
-                                className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                            >
-                                <Building className="w-4 h-4 mr-3" />
-                                Change Site
-                            </button>
-                        </li>
-                     </ul>
-                </div>
-            )}
+        <div className="flex items-center">
+            <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+                VidyutAI Energy Management
+            </h1>
         </div>
       </div>
       <div className="flex items-center space-x-4">

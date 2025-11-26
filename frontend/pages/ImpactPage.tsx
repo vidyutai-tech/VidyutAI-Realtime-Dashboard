@@ -92,7 +92,7 @@ const ImpactPage: React.FC = () => {
 
   // Calculate savings
   const totalSavings = costData[1].cost - costData[0].cost;
-  const emissionReduction = ((emissionsData[1].emissions - emissionsData[0].emissions) / emissionsData[1].emissions * 100).toFixed(1);
+  const emissionReduction = ((emissionsData[1].emissions - emissionsData[0].emissions) / emissionsData[1].emissions * 100).toFixed(2);
 
   // Calculate KPIs
   const kpis = {
@@ -236,21 +236,21 @@ const ImpactPage: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex space-x-2">
-            {(['daily', 'weekly', 'monthly'] as const).map((range) => (
-              <button
-                key={range}
-                onClick={() => setTimeRange(range)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  timeRange === range
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                }`}
-              >
-                {range.charAt(0).toUpperCase() + range.slice(1)}
-              </button>
-            ))}
-          </div>
+        <div className="flex space-x-2">
+          {(['daily', 'weekly', 'monthly'] as const).map((range) => (
+            <button
+              key={range}
+              onClick={() => setTimeRange(range)}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                timeRange === range
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+              }`}
+            >
+              {range.charAt(0).toUpperCase() + range.slice(1)}
+            </button>
+          ))}
+        </div>
           <button
             onClick={handleDownloadPDF}
             disabled={isGeneratingPDF}
@@ -269,7 +269,7 @@ const ImpactPage: React.FC = () => {
               </>
             )}
           </button>
-        </div>
+          </div>
       </div>
 
       {/* KPI Strip */}
@@ -294,12 +294,14 @@ const ImpactPage: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
               <XAxis 
                 dataKey="component" 
+                label={{ value: 'Component', position: 'insideBottom', offset: -5 }}
                 className="text-xs"
                 tick={{ fill: 'currentColor' }}
               />
               <YAxis 
                 label={{ value: 'Power (kW)', angle: -90, position: 'insideLeft' }}
                 tick={{ fill: 'currentColor' }}
+                tickFormatter={(value) => Number(value).toFixed(2)}
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
@@ -317,12 +319,14 @@ const ImpactPage: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
               <XAxis 
                 dataKey="component" 
+                label={{ value: 'Component', position: 'insideBottom', offset: -5 }}
                 className="text-xs"
                 tick={{ fill: 'currentColor' }}
               />
               <YAxis 
                 label={{ value: 'Power (kW)', angle: -90, position: 'insideLeft' }}
                 tick={{ fill: 'currentColor' }}
+                tickFormatter={(value) => Number(value).toFixed(2)}
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
@@ -342,11 +346,13 @@ const ImpactPage: React.FC = () => {
             <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
             <XAxis 
               dataKey="component" 
+              label={{ value: 'Component', position: 'insideBottom', offset: -5 }}
               tick={{ fill: 'currentColor' }}
             />
             <YAxis 
               label={{ value: 'Power (kW)', angle: -90, position: 'insideLeft' }}
               tick={{ fill: 'currentColor' }}
+              tickFormatter={(value) => Number(value).toFixed(2)}
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend />
@@ -370,6 +376,7 @@ const ImpactPage: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
               <XAxis 
                 dataKey="component" 
+                label={{ value: 'Component', position: 'insideBottom', offset: -5 }}
                 className="text-xs"
                 tick={{ fill: 'currentColor' }}
                 angle={-15}
@@ -379,6 +386,7 @@ const ImpactPage: React.FC = () => {
               <YAxis 
                 label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft' }}
                 tick={{ fill: 'currentColor' }}
+                tickFormatter={(value) => Number(value).toFixed(2)}
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
@@ -399,6 +407,7 @@ const ImpactPage: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
               <XAxis 
                 dataKey="component" 
+                label={{ value: 'Component', position: 'insideBottom', offset: -5 }}
                 className="text-xs"
                 tick={{ fill: 'currentColor' }}
                 angle={-15}
@@ -408,6 +417,7 @@ const ImpactPage: React.FC = () => {
               <YAxis 
                 label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft' }}
                 tick={{ fill: 'currentColor' }}
+                tickFormatter={(value) => Number(value).toFixed(2)}
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
@@ -432,6 +442,7 @@ const ImpactPage: React.FC = () => {
             <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
             <XAxis 
               dataKey="component" 
+              label={{ value: 'Component', position: 'insideBottom', offset: -5 }}
               tick={{ fill: 'currentColor' }}
               angle={-15}
               textAnchor="end"
@@ -440,6 +451,7 @@ const ImpactPage: React.FC = () => {
             <YAxis 
               label={{ value: 'Energy (kWh)', angle: -90, position: 'insideLeft' }}
               tick={{ fill: 'currentColor' }}
+              tickFormatter={(value) => Number(value).toFixed(2)}
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend />
@@ -463,11 +475,13 @@ const ImpactPage: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
               <XAxis 
                 dataKey="type" 
+                label={{ value: 'Type', position: 'insideBottom', offset: -5 }}
                 tick={{ fill: 'currentColor' }}
               />
               <YAxis 
                 label={{ value: 'Cost (₹)', angle: -90, position: 'insideLeft' }}
                 tick={{ fill: 'currentColor' }}
+                tickFormatter={(value) => Number(value).toFixed(2)}
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
@@ -480,7 +494,7 @@ const ImpactPage: React.FC = () => {
           </ResponsiveContainer>
           <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
             <p className="text-sm text-green-800 dark:text-green-400 font-semibold">
-              💰 Savings: ₹{(totalSavings / 1000).toFixed(2)}K ({((totalSavings / costData[1].cost) * 100).toFixed(1)}% reduction)
+              💰 Savings: ₹{(totalSavings / 1000).toFixed(2)}K ({((totalSavings / costData[1].cost) * 100).toFixed(2)}% reduction)
             </p>
             <p className="text-xs text-green-700 dark:text-green-500 mt-1">
               Optimized EMS reduces operational costs through intelligent power routing and peak shaving.
@@ -497,11 +511,13 @@ const ImpactPage: React.FC = () => {
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
               <XAxis 
                 dataKey="type" 
+                label={{ value: 'Type', position: 'insideBottom', offset: -5 }}
                 tick={{ fill: 'currentColor' }}
               />
               <YAxis 
                 label={{ value: 'CO₂ (Mega kg)', angle: -90, position: 'insideLeft' }}
                 tick={{ fill: 'currentColor' }}
+                tickFormatter={(value) => Number(value).toFixed(2)}
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend />

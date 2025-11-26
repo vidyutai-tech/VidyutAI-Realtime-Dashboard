@@ -107,7 +107,7 @@ const AnomalyRootCause: React.FC<AnomalyRootCauseProps> = ({
                 </div>
                 <div className="text-right">
                   <div className={`text-2xl font-bold ${config.textColor}`}>
-                    {anomaly.deviation > 0 ? '+' : ''}{anomaly.deviation.toFixed(1)}%
+                    {anomaly.deviation > 0 ? '+' : ''}{anomaly.deviation.toFixed(2)}%
                   </div>
                   <div className="text-xs text-gray-500 dark:text-gray-400">Deviation</div>
                 </div>
@@ -175,7 +175,7 @@ const AnomalyRootCause: React.FC<AnomalyRootCauseProps> = ({
                     />
                   </div>
                   <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 w-12 text-right">
-                    {anomaly.confidence}%
+                    {Number(anomaly.confidence).toFixed(2)}%
                   </span>
                 </div>
               </div>

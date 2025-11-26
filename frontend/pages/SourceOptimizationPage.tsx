@@ -1,17 +1,8 @@
 import { useContext, useState, useEffect, useMemo, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { AppContext } from "../contexts/AppContext";
 import axios from "axios";
 import { Snackbar, Alert } from "@mui/material";
-import {
-  ResponsiveContainer,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  AreaChart,
-  Area,
-} from "recharts";
 import {
   BatteryCharging,
   DollarSign,
@@ -24,6 +15,8 @@ import {
 
 const SourceOptimizationPage = () => {
   const { currentUser } = useContext(AppContext)!;
+  const navigate = useNavigate();
+  const location = useLocation();
   const [formData, setFormData] = useState({
     weather: "Sunny",
     objective_type: "cost",
@@ -51,7 +44,6 @@ const SourceOptimizationPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [chartData, setChartData] = useState<any[]>([]);
   const [plotUrl, setPlotUrl] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -114,9 +106,6 @@ const SourceOptimizationPage = () => {
 
     const parsed = JSON.parse(savedResponse);
     setResponse(parsed);
-    if (parsed.chart_data) {
-      setChartData(parsed.chart_data);
-    }
     if (parsed.plot_base64) {
       setPlotUrl(`data:image/png;base64,${parsed.plot_base64}`);
     }
@@ -204,7 +193,6 @@ const SourceOptimizationPage = () => {
 
       if (res.data.status === "success") {
         setResponse(res.data);
-        setChartData(res.data.chart_data || []);
         if (res.data.plot_base64) {
           setPlotUrl(`data:image/png;base64,${res.data.plot_base64}`);
         } else {
@@ -214,6 +202,13 @@ const SourceOptimizationPage = () => {
           "sourceOptimizationResponse",
           JSON.stringify(res.data)
         );
+        
+        // Navigate to optimization results after successful optimization
+        if (navigate) {
+          navigate('/optimization-results', { 
+            state: { returnTo: location.state?.returnTo || '/main-options' }
+          });
+        }
       } else {
         setError(res.data.message || "Optimization failed");
         setOpen(true);

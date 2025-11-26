@@ -195,7 +195,7 @@ const MLAlertCard: React.FC<MLAlertCardProps> = ({ alert, onAcknowledge }) => {
                       <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Anomaly Score</p>
                       <div className="flex items-baseline gap-2">
                         <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                          {(anomalyData.anomalyScore * 100).toFixed(1)}%
+                          {(anomalyData.anomalyScore * 100).toFixed(2)}%
                         </span>
                         <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                           <div
@@ -238,7 +238,7 @@ const MLAlertCard: React.FC<MLAlertCardProps> = ({ alert, onAcknowledge }) => {
                     <div>
                       <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Confidence</p>
                       <p className="text-xl font-bold text-gray-900 dark:text-white">
-                        {(rulData.rulConfidence * 100).toFixed(0)}%
+                        {(rulData.rulConfidence * 100).toFixed(2)}%
                       </p>
                     </div>
                     <div>
@@ -253,7 +253,7 @@ const MLAlertCard: React.FC<MLAlertCardProps> = ({ alert, onAcknowledge }) => {
                           />
                         </div>
                         <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {(rulData.featureDrift * 100).toFixed(1)}%
+                          {(rulData.featureDrift * 100).toFixed(2)}%
                         </span>
                       </div>
                     </div>
@@ -271,7 +271,7 @@ const MLAlertCard: React.FC<MLAlertCardProps> = ({ alert, onAcknowledge }) => {
                     <BarChart3 className="w-5 h-5 text-green-600 dark:text-green-400" />
                     <h4 className="font-semibold text-gray-900 dark:text-white">Fault Classification</h4>
                     <span className="ml-auto text-xs text-gray-600 dark:text-gray-400">
-                      Confidence: {faultClassification.confidence}%
+                      Confidence: {Number(faultClassification.confidence).toFixed(2)}%
                     </span>
                   </div>
                   <div className="space-y-2">
@@ -283,7 +283,7 @@ const MLAlertCard: React.FC<MLAlertCardProps> = ({ alert, onAcknowledge }) => {
                               {formatFaultName(fault.name)}
                             </span>
                             <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                              {(fault.probability * 100).toFixed(1)}%
+                              {(fault.probability * 100).toFixed(2)}%
                             </span>
                           </div>
                           <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">

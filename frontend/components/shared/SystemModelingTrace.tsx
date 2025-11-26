@@ -52,7 +52,7 @@ const SystemModelingTrace: React.FC<SystemModelingTraceProps> = ({
           <div className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Model Confidence</span>
             <span className="ml-2 text-lg font-bold text-blue-600 dark:text-blue-400">
-              {modelConfidence.toFixed(1)}%
+              {modelConfidence.toFixed(2)}%
             </span>
           </div>
           <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -77,12 +77,14 @@ const SystemModelingTrace: React.FC<SystemModelingTraceProps> = ({
             <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
             <XAxis
               dataKey="time"
+              label={{ value: 'Time', position: 'insideBottom', offset: -5 }}
               tick={{ fill: 'currentColor', fontSize: 12 }}
               interval="preserveStartEnd"
             />
             <YAxis
               label={{ value: `${title} (${unit})`, angle: -90, position: 'insideLeft' }}
               tick={{ fill: 'currentColor' }}
+              tickFormatter={(value) => Number(value).toFixed(2)}
             />
             <Tooltip
               contentStyle={{
@@ -90,6 +92,7 @@ const SystemModelingTrace: React.FC<SystemModelingTraceProps> = ({
                 border: '1px solid #ccc',
                 borderRadius: '8px',
               }}
+              formatter={(value: any) => Number(value).toFixed(2)}
               labelFormatter={(label) => {
                 const point = chartData.find(d => d.time === label);
                 return point ? new Date(point.timestamp).toLocaleString() : label;

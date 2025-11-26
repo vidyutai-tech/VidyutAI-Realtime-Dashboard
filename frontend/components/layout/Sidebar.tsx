@@ -1,33 +1,60 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, AlertTriangle, AreaChart, Wrench, Bot, SlidersHorizontal, Settings, X, Bolt, Share2, Building, HardDrive, TrendingUp, Zap, Users } from 'lucide-react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { LayoutDashboard, AlertTriangle, AreaChart, Wrench, Bot, SlidersHorizontal, Settings, X, Bolt, Share2, Building, HardDrive, TrendingUp, Zap, Users, Lightbulb, MessageSquare } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
   setSidebarOpen: (isOpen: boolean) => void;
 }
 
-const mainNavItems = [
-  { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+// Organized by 4 main pipelines
+const planningNavItems = [
+  { name: 'Planning Wizard', path: '/planning-wizard', icon: Bolt },
+];
+
+const optimizationNavItems = [
+  { name: 'Optimization Flow', path: '/optimization-flow', icon: TrendingUp },
+  { name: 'Optimization Setup', path: '/optimization-setup', icon: Settings },
+  { name: 'Optimization Results', path: '/optimization-results', icon: TrendingUp },
+  { name: 'Demand Optimization', path: '/demand-optimization', icon: Users },
+  { name: 'Source Optimization', path: '/source-optimization', icon: Zap },
+];
+
+const aiMlNavItems = [
+  { name: 'AI/ML Insights', path: '/ai-ml-insights', icon: Bot },
+  { name: 'AI Predictions', path: '/predictions', icon: Bot },
+  { name: 'Smart Recommendations', path: '/ai-recommendations', icon: Lightbulb },
+  { name: 'Renewable Optimization', path: '/renewable-optimization', icon: Zap },
+  { name: 'AI Explanations', path: '/ai-explanations', icon: MessageSquare },
+];
+
+const dashboardNavItems = [
+  { name: 'Operations Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { name: 'Site Detail', path: '/site-detail', icon: AreaChart },
   { name: 'Impact Analysis', path: '/impact', icon: TrendingUp },
   { name: 'Digital Twin', path: '/digital-twin', icon: Share2 },
-  { name: 'Demand Optimization', path: '/demand-optimization', icon: Users },
-  { name: 'Source Optimization', path: '/source-optimization', icon: Zap },
+  { name: 'Simulator', path: '/simulator', icon: SlidersHorizontal },
   { name: 'Alerts', path: '/alerts', icon: AlertTriangle },
   { name: 'Maintenance', path: '/maintenance', icon: Wrench },
-  { name: 'Simulator', path: '/simulator', icon: SlidersHorizontal },
-  { name: 'Predictions', path: '/predictions', icon: Bot },
 ];
 
 const managementNavItems = [
-    { name: 'Sites', path: '/manage-sites', icon: Building },
-    { name: 'Assets', path: '/manage-assets', icon: HardDrive },
-    { name: 'Settings', path: '/settings', icon: Settings },
+  { name: 'Sites', path: '/manage-sites', icon: Building },
+  { name: 'Assets', path: '/manage-assets', icon: HardDrive },
+  { name: 'Settings', path: '/settings', icon: Settings },
 ];
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, setSidebarOpen }) => {
-  const NavItem: React.FC<{ item: typeof mainNavItems[0] }> = ({ item }) => (
+  const location = useLocation();
+  const currentPath = location.pathname;
+
+  // Determine which pipeline section is active
+  const isPlanningActive = currentPath.includes('/planning-wizard');
+  const isOptimizationActive = currentPath.includes('/optimization') || currentPath.includes('/demand-optimization') || currentPath.includes('/source-optimization');
+  const isAIMLActive = currentPath.includes('/ai-ml') || currentPath.includes('/predictions') || currentPath.includes('/ai-recommendations') || currentPath.includes('/renewable-optimization') || currentPath.includes('/ai-explanations');
+  const isDashboardActive = currentPath.includes('/dashboard') || currentPath.includes('/site-detail') || currentPath.includes('/impact') || currentPath.includes('/digital-twin') || currentPath.includes('/simulator') || currentPath.includes('/alerts') || currentPath.includes('/maintenance');
+
+  const NavItem: React.FC<{ item: { name: string; path: string; icon: any } }> = ({ item }) => (
     <NavLink
       to={item.path}
       className={({ isActive }) =>
@@ -42,6 +69,19 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setSidebarOpen }) => {
       <item.icon className="w-5 h-5 mr-3" />
       <span>{item.name}</span>
     </NavLink>
+  );
+
+  const NavSection: React.FC<{ title: string; items: typeof planningNavItems; isActive: boolean }> = ({ title, items, isActive }) => (
+    <div className={`mb-6 ${isActive ? 'border-l-4 border-blue-600 pl-2' : ''}`}>
+      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-4 mb-2">{title}</h3>
+      <ul>
+        {items.map((item) => (
+          <li key={item.name}>
+            <NavItem item={item} />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 
   return (
@@ -70,27 +110,36 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setSidebarOpen }) => {
           </button>
         </div>
         <div className="overflow-y-auto flex-1">
-            <nav className="mt-4">
+          <nav className="mt-4">
+            <div className="px-4 mb-4">
+              <NavLink
+                to="/main-options"
+                className="flex items-center px-3 py-2 text-sm font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                onClick={() => { if (window.innerWidth < 768) setSidebarOpen(false); }}
+              >
+                <LayoutDashboard className="w-5 h-5 mr-2" />
+                <span>Main Options</span>
+              </NavLink>
+            </div>
+            
+            <NavSection title="1. Planning Wizard" items={planningNavItems} isActive={isPlanningActive} />
+            <NavSection title="2. Optimization Flow" items={optimizationNavItems} isActive={isOptimizationActive} />
+            <NavSection title="3. AI/ML Insights" items={aiMlNavItems} isActive={isAIMLActive} />
+            <NavSection title="4. Unified Dashboard" items={dashboardNavItems} isActive={isDashboardActive} />
+            
+            <div className="px-4 mt-6">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Management</h3>
+            </div>
+            <nav className="mt-2">
               <ul>
-                {mainNavItems.map((item) => (
+                {managementNavItems.map((item) => (
                   <li key={item.name}>
                     <NavItem item={item} />
                   </li>
                 ))}
               </ul>
             </nav>
-            <div className="px-4 mt-6">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Management</h3>
-            </div>
-            <nav className="mt-2">
-                 <ul>
-                    {managementNavItems.map((item) => (
-                      <li key={item.name}>
-                        <NavItem item={item} />
-                      </li>
-                    ))}
-                  </ul>
-            </nav>
+          </nav>
         </div>
       </aside>
     </>

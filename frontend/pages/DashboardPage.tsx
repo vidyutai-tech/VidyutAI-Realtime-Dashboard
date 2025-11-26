@@ -49,7 +49,7 @@ const HealthBar: React.FC<{ label: string; value: number; icon: React.ReactNode 
       <div className="flex-1">
         <div className="flex justify-between text-sm mb-1">
           <span className="font-medium text-gray-700 dark:text-gray-300">{label}</span>
-          <span className="font-semibold text-gray-800 dark:text-gray-200">{value.toFixed(1)}%</span>
+          <span className="font-semibold text-gray-800 dark:text-gray-200">{value.toFixed(2)}%</span>
         </div>
         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
           <div className={`${barColor} h-2 rounded-full`} style={{ width: `${value}%` }}></div>
@@ -129,8 +129,8 @@ const DashboardPage: React.FC = () => {
     // Initial load
     loadTimeseries();
     
-    // Refresh every 10 seconds for real-time feel (Socket.IO updates every 5s)
-    const interval = setInterval(loadTimeseries, 10000);
+    // Refresh every 10 minutes for IoT data updates
+    const interval = setInterval(loadTimeseries, 600000);
     return () => clearInterval(interval);
   }, [selectedSite]);
 
@@ -201,10 +201,10 @@ const DashboardPage: React.FC = () => {
 
         {/* Row 1: KPIs */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryCard title="Site Health" value={healthStatus?.site_health?.toFixed(1) ?? 0} unit="%" icon={<Shield className="w-6 h-6 text-green-500" />} isLoading={isLoading} />
-          <SummaryCard title="Grid Draw" value={healthStatus?.grid_draw?.toFixed(1) ?? 0} unit="kW" icon={<Zap className="w-6 h-6 text-yellow-500" />} isLoading={isLoading} />
-          <SummaryCard title="Battery SoC" value={healthStatus?.battery_soc?.toFixed(1) ?? 0} unit="%" icon={<BatteryCharging className="w-6 h-6 text-blue-500" />} isLoading={isLoading} />
-          <SummaryCard title="Today's PV Gen" value={healthStatus?.pv_generation_today?.toFixed(0) ?? 0} unit="kWh" icon={<Sun className="w-6 h-6 text-orange-400" />} isLoading={isLoading} />
+          <SummaryCard title="Site Health" value={healthStatus?.site_health?.toFixed(2) ?? 0} unit="%" icon={<Shield className="w-6 h-6 text-green-500" />} isLoading={isLoading} />
+          <SummaryCard title="Grid Draw" value={healthStatus?.grid_draw?.toFixed(2) ?? 0} unit="kW" icon={<Zap className="w-6 h-6 text-yellow-500" />} isLoading={isLoading} />
+          <SummaryCard title="Battery SoC" value={healthStatus?.battery_soc?.toFixed(2) ?? 0} unit="%" icon={<BatteryCharging className="w-6 h-6 text-blue-500" />} isLoading={isLoading} />
+          <SummaryCard title="Today's PV Gen" value={healthStatus?.pv_generation_today?.toFixed(2) ?? 0} unit="kWh" icon={<Sun className="w-6 h-6 text-orange-400" />} isLoading={isLoading} />
         </div>
 
         {/* Row 2: Real-Time Power Flow Chart */}
@@ -235,12 +235,14 @@ const DashboardPage: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
                 <XAxis 
                   dataKey="time" 
+                  label={{ value: 'Time', position: 'insideBottom', offset: -5 }}
                   tick={{ fill: 'currentColor', fontSize: 12 }}
                   interval="preserveStartEnd"
                 />
                 <YAxis 
                   label={{ value: 'Power (kW)', angle: -90, position: 'insideLeft' }}
                   tick={{ fill: 'currentColor' }}
+                  tickFormatter={(value) => Number(value).toFixed(2)}
                 />
                 <Tooltip 
                   contentStyle={{ 
@@ -248,6 +250,7 @@ const DashboardPage: React.FC = () => {
                     border: '1px solid #ccc',
                     borderRadius: '8px'
                   }}
+                  formatter={(value: any) => Number(value).toFixed(2)}
                 />
                 <Legend />
                 <Area type="monotone" dataKey="power" stroke="#f59e0b" fillOpacity={1} fill="url(#colorPower)" name="PV Generation" />
@@ -293,8 +296,16 @@ const DashboardPage: React.FC = () => {
                   ]}
                 >
                   <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
-                  <XAxis dataKey="hour" tick={{ fill: 'currentColor' }} />
-                  <YAxis label={{ value: 'Cost (₹)', angle: -90, position: 'insideLeft' }} tick={{ fill: 'currentColor' }} />
+                  <XAxis 
+                    dataKey="hour" 
+                    label={{ value: 'Hour', position: 'insideBottom', offset: -5 }}
+                    tick={{ fill: 'currentColor' }} 
+                  />
+                  <YAxis 
+                    label={{ value: 'Cost (₹)', angle: -90, position: 'insideLeft' }} 
+                    tick={{ fill: 'currentColor' }}
+                    tickFormatter={(value) => Number(value).toFixed(2)}
+                  />
                   <Tooltip />
                   <Legend />
                   <Bar dataKey="cost" name="Actual Cost" fill="#ef4444" />

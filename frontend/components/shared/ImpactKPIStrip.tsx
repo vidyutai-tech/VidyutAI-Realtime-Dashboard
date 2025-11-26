@@ -54,7 +54,7 @@ const ImpactKPIStrip: React.FC<ImpactKPIStripProps> = ({
         </div>
         <div>
           <p className="text-orange-100 text-sm font-medium mb-1">Renewable Utilization</p>
-          <p className="text-3xl font-bold">{renewableUtilization.toFixed(1)}%</p>
+          <p className="text-3xl font-bold">{renewableUtilization.toFixed(2)}%</p>
           <p className="text-orange-100 text-xs mt-2">Of available solar</p>
         </div>
       </div>
@@ -67,7 +67,7 @@ const ImpactKPIStrip: React.FC<ImpactKPIStripProps> = ({
         </div>
         <div>
           <p className="text-teal-100 text-sm font-medium mb-1">Carbon Avoided</p>
-          <p className="text-3xl font-bold">{carbonAvoided.toFixed(1)}</p>
+          <p className="text-3xl font-bold">{carbonAvoided.toFixed(2)}</p>
           <p className="text-teal-100 text-xs mt-2">kg CO₂ per day</p>
         </div>
       </div>

@@ -17,6 +17,7 @@ const assetsRoutes = require('./routes/assets');
 const predictionsRoutes = require('./routes/predictions');
 const mlPredictionsRoutes = require('./routes/ml-predictions');
 const actionsRoutes = require('./routes/actions');
+const wizardRoutes = require('./routes/wizard');
 
 // Initialize Express app
 const app = express();
@@ -70,29 +71,30 @@ app.use('/api/v1/assets', assetsRoutes);
 app.use('/api/v1/predictions', predictionsRoutes);
 app.use('/api/v1/predict', mlPredictionsRoutes);
 app.use('/api/v1/actions', actionsRoutes);
+app.use('/api/v1/wizard', wizardRoutes);
 
 // Simulator endpoint (also available as /api/v1/simulate for convenience)
 app.post('/api/v1/simulate', async (req, res) => {
   const { pvCurtail = 0, batteryTarget = 80, gridPrice = 5 } = req.body;
-  
+
   // Generate mock simulation results
   const hours = 24;
   const cost = [];
   const emissions = [];
-  
+
   for (let i = 0; i < hours; i++) {
     // Simulate cost based on parameters
     const baseCost = gridPrice * (100 + Math.random() * 50);
     const pvSavings = pvCurtail * 2;
     const batterySavings = (batteryTarget - 50) * 0.5;
-    
+
     cost.push(parseFloat((baseCost - pvSavings - batterySavings).toFixed(2)));
-    
+
     // Simulate emissions (kg CO2)
     const baseEmissions = 50 + Math.random() * 20;
     emissions.push(parseFloat((baseEmissions * (1 - pvCurtail / 100)).toFixed(2)));
   }
-  
+
   res.json({
     success: true,
     cost,
@@ -121,7 +123,7 @@ io.on('connection', (socket) => {
   socket.on('subscribe_site', (siteId) => {
     socket.join(`site_${siteId}`);
     console.log(`Client ${socket.id} subscribed to site ${siteId}`);
-    
+
     // Send initial data from database
     const db = getDatabase();
     const latestData = db.prepare(`
@@ -131,7 +133,7 @@ io.on('connection', (socket) => {
       ORDER BY timestamp DESC
       LIMIT 20
     `).all(siteId);
-    
+
     const metrics = {};
     latestData.forEach(row => {
       metrics[row.metric_type] = {
@@ -139,7 +141,7 @@ io.on('connection', (socket) => {
         unit: row.unit
       };
     });
-    
+
     socket.emit('site_data', {
       siteId,
       timestamp: new Date().toISOString(),
@@ -156,26 +158,26 @@ io.on('connection', (socket) => {
 // Real-time data updates from SQLite database
 if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_SIMULATOR === 'true') {
   // Start the real-time simulator
-  const simulator = getSimulator(5000); // 5 second intervals
+  const simulator = getSimulator(600000); // 10 minute intervals
   simulator.start();
-  
-  // Broadcast latest data from database every 5 seconds
+
+  // Broadcast latest data from database every 10 minutes
   setInterval(() => {
     const db = getDatabase();
     const sites = db.prepare('SELECT id FROM sites WHERE status = ?').all('online');
-    
+
     sites.forEach(site => {
       const siteId = site.id;
-      
+
       // Get latest metrics from database
       const latestData = db.prepare(`
         SELECT metric_type, metric_value, unit
         FROM timeseries_data
-        WHERE site_id = ? AND timestamp >= datetime('now', '-10 seconds')
+        WHERE site_id = ? AND timestamp >= datetime('now', '-10 minutes')
         ORDER BY timestamp DESC
         LIMIT 10
       `).all(siteId);
-      
+
       if (latestData.length > 0) {
         const metrics = {};
         latestData.forEach(row => {
@@ -184,32 +186,32 @@ if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_SIMULATOR === 't
             unit: row.unit
           };
         });
-        
+
         // Calculate derived metrics
         const pvGen = metrics.pv_generation?.value || 0;
         const netLoad = metrics.net_load?.value || 0;
         const gridDraw = metrics.grid_draw?.value || 0;
         const batteryDischarge = metrics.battery_discharge?.value || 0;
-        
+
         const realtimeData = {
-      timestamp: new Date().toISOString(),
+          timestamp: new Date().toISOString(),
           siteId,
           power: (pvGen + gridDraw + batteryDischarge).toFixed(2),
           energy: (netLoad * 0.5).toFixed(2), // Approximate energy
           efficiency: metrics.soc?.value ? (85 + (metrics.soc.value / 100) * 10).toFixed(2) : '85.00',
           cost: ((gridDraw * 0.1) + (batteryDischarge * 0.05)).toFixed(2),
           metrics: metrics
-    };
-    
+        };
+
         // Broadcast to site-specific room
         io.to(`site_${siteId}`).emit('metrics_update', realtimeData);
-        
+
         // Also broadcast globally
         io.emit('metrics_update', realtimeData);
       }
     });
-  }, 5000);
-  
+  }, 600000); // 10 minutes
+
   // Clean old data every hour (keep last 48 hours)
   setInterval(() => {
     simulator.cleanOldData(48);

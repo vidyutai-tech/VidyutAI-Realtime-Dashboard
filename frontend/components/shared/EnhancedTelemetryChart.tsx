@@ -133,6 +133,7 @@ const EnhancedTelemetryChart: React.FC<EnhancedTelemetryChartProps> = ({
             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
             <XAxis
               dataKey="timestamp"
+              label={{ value: 'Time', position: 'insideBottom', offset: -5 }}
               stroke={textColor}
               tick={{ fill: textColor }}
               tickFormatter={(value) => {
@@ -144,12 +145,14 @@ const EnhancedTelemetryChart: React.FC<EnhancedTelemetryChartProps> = ({
               yAxisId="left"
               stroke="#8884d8"
               label={{ value: 'Voltage/Power', angle: -90, position: 'insideLeft', fill: '#8884d8' }}
+              tickFormatter={(value) => Number(value).toFixed(2)}
             />
             <YAxis
               yAxisId="right"
               orientation="right"
               stroke="#82ca9d"
               label={{ value: 'Current/Frequency/SoC', angle: -90, position: 'insideRight', fill: '#82ca9d' }}
+              tickFormatter={(value) => Number(value).toFixed(2)}
             />
             <Tooltip
               contentStyle={{

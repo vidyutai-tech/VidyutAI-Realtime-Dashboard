@@ -192,9 +192,20 @@ const SiteDetailPage: React.FC = () => {
             <ResponsiveContainer>
               <AreaChart data={formattedTelemetry}>
                 <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#4A5568' : '#e2e8f0'}/>
-                <XAxis dataKey="time" stroke={theme === 'dark' ? '#A0AEC0' : '#4A5568'}/>
-                <YAxis stroke={theme === 'dark' ? '#A0AEC0' : '#4A5568'}/>
-                <Tooltip contentStyle={{ backgroundColor: theme === 'dark' ? '#1A202C' : '#FFFFFF', border: `1px solid ${theme === 'dark' ? '#4A5568' : '#e2e8f0'}` }}/>
+                <XAxis 
+                  dataKey="time" 
+                  label={{ value: 'Time', position: 'insideBottom', offset: -5 }}
+                  stroke={theme === 'dark' ? '#A0AEC0' : '#4A5568'}
+                />
+                <YAxis 
+                  label={{ value: 'Power (kW)', angle: -90, position: 'insideLeft' }}
+                  stroke={theme === 'dark' ? '#A0AEC0' : '#4A5568'}
+                  tickFormatter={(value) => Number(value).toFixed(2)}
+                />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: theme === 'dark' ? '#1A202C' : '#FFFFFF', border: `1px solid ${theme === 'dark' ? '#4A5568' : '#e2e8f0'}` }}
+                  formatter={(value: any) => Number(value).toFixed(2)}
+                />
                 <Legend />
                 <Area type="monotone" dataKey="pv_generation" stackId="1" stroke="#ffc658" fill="#ffc658" name="PV Gen"/>
                 <Area type="monotone" dataKey="net_load" stackId="1" stroke="#8884d8" fill="#8884d8" name="Net Load"/>

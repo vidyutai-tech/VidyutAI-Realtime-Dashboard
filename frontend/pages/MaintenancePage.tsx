@@ -84,7 +84,7 @@ const MaintenancePage: React.FC = () => {
                       <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5">
                         <div className="bg-red-500 h-2.5 rounded-full" style={{ width: `${asset.failure_probability * 100}%` }}></div>
                       </div>
-                      <span className="ml-3 font-semibold text-red-500 dark:text-red-400">{(asset.failure_probability * 100).toFixed(1)}%</span>
+                      <span className="ml-3 font-semibold text-red-500 dark:text-red-400">{(asset.failure_probability * 100).toFixed(2)}%</span>
                     </div>
                   </td>
                   <td className="p-3 text-center">

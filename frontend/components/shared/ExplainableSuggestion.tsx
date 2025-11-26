@@ -51,7 +51,7 @@ const ExplainableSuggestion: React.FC<ExplainableSuggestionProps> = ({ suggestio
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Model Confidence</span>
               <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {explanation.modelConfidence}%
+                {Number(explanation.modelConfidence).toFixed(2)}%
               </span>
             </div>
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -118,7 +118,7 @@ const ExplainableSuggestion: React.FC<ExplainableSuggestionProps> = ({ suggestio
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Battery Cycle Cost</span>
               </div>
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                {explanation.expectedBatteryCycleCost}%
+                {Number(explanation.expectedBatteryCycleCost).toFixed(2)}%
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Expected degradation impact

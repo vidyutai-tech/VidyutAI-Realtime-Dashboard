@@ -1,4 +1,4 @@
-import { HealthStatus, Alert, MaintenanceAsset, Site, RLStrategy, DigitalTwinDataPoint, Anomaly, AIQuery, RLSuggestion } from '../types';
+import { HealthStatus, Alert, MaintenanceAsset, Site, RLStrategy, DigitalTwinDataPoint, Anomaly, AIQuery, RLSuggestion, UserProfile, LoadProfile, PlanningRecommendation, OptimizationConfig, Appliance, PrimaryGoal } from '../types';
 declare global {
   interface ImportMeta {
     env: {
@@ -288,4 +288,115 @@ export const fetchRLSuggestions = async (siteId: string): Promise<RLSuggestion[]
     const response = await fetch(`${API_BASE_URL}/sites/${siteId}/suggestions`, { headers: getAuthHeaders() });
     if (!response.ok) throw new Error('Failed to fetch RL suggestions');
     return response.json();
+};
+
+// --- Wizard & Planning API ---
+export const getUserProfile = async (): Promise<UserProfile | null> => {
+  const response = await fetch(`${API_BASE_URL}/wizard/profile`, { headers: getAuthHeaders() });
+  if (!response.ok) throw new Error('Failed to fetch user profile');
+  const result = await response.json();
+  return result.profile;
+};
+
+export const saveSiteTypeAndWorkflow = async (siteType: string, workflowPreference: string): Promise<{ success: boolean; profile: UserProfile }> => {
+  const response = await fetch(`${API_BASE_URL}/wizard/site-type`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ site_type: siteType, workflow_preference: workflowPreference })
+  });
+  if (!response.ok) throw new Error('Failed to save site type and workflow');
+  return response.json();
+};
+
+export const savePlanningStep1 = async (data: { preferred_sources: string[]; primary_goal: PrimaryGoal; allow_diesel: boolean }): Promise<{ success: boolean }> => {
+  const response = await fetch(`${API_BASE_URL}/wizard/planning/step1`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to save planning step 1');
+  return response.json();
+};
+
+export const savePlanningStep2 = async (data: { name: string; appliances: Omit<Appliance, 'id'>[]; site_id?: string }): Promise<{ success: boolean; load_profile: LoadProfile }> => {
+  const response = await fetch(`${API_BASE_URL}/wizard/planning/step2`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error', message: 'Failed to save load profile' }));
+    throw new Error(errorData.message || errorData.error || 'Failed to save load profile');
+  }
+  return response.json();
+};
+
+export const savePlanningStep3 = async (data: {
+  load_profile_id: string;
+  preferred_sources: string[];
+  primary_goal: PrimaryGoal;
+  allow_diesel: boolean;
+  action: 'save' | 'proceed_to_optimization';
+  site_id?: string;
+}): Promise<{ success: boolean; recommendation: PlanningRecommendation; action: string }> => {
+  const response = await fetch(`${API_BASE_URL}/wizard/planning/step3`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) throw new Error('Failed to generate planning recommendation');
+  return response.json();
+};
+
+export const getLoadProfiles = async (siteId?: string): Promise<LoadProfile[]> => {
+  const url = siteId 
+    ? `${API_BASE_URL}/wizard/load-profiles?site_id=${siteId}`
+    : `${API_BASE_URL}/wizard/load-profiles`;
+  const response = await fetch(url, { headers: getAuthHeaders() });
+  if (!response.ok) {
+    if (response.status === 401) {
+      console.warn('Unauthorized: Token may be missing or expired');
+      return []; // Return empty array instead of throwing
+    }
+    throw new Error(`Failed to fetch load profiles: ${response.status} ${response.statusText}`);
+  }
+  const result = await response.json();
+  return result.load_profiles || [];
+};
+
+export const getPlanningRecommendations = async (siteId?: string, loadProfileId?: string): Promise<PlanningRecommendation[]> => {
+  const params = new URLSearchParams();
+  if (siteId) params.append('site_id', siteId);
+  if (loadProfileId) params.append('load_profile_id', loadProfileId);
+  const url = `${API_BASE_URL}/wizard/planning-recommendations${params.toString() ? '?' + params.toString() : ''}`;
+  const response = await fetch(url, { headers: getAuthHeaders() });
+  if (!response.ok) {
+    if (response.status === 401) {
+      console.warn('Unauthorized: Token may be missing or expired');
+      return []; // Return empty array instead of throwing
+    }
+    throw new Error(`Failed to fetch planning recommendations: ${response.status} ${response.statusText}`);
+  }
+  const result = await response.json();
+  return result.recommendations || [];
+};
+
+export const saveOptimizationConfig = async (config: Omit<OptimizationConfig, 'id' | 'created_at' | 'updated_at'>): Promise<{ success: boolean; config: OptimizationConfig }> => {
+  const response = await fetch(`${API_BASE_URL}/wizard/optimization/setup`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(config)
+  });
+  if (!response.ok) throw new Error('Failed to save optimization config');
+  return response.json();
+};
+
+export const getOptimizationConfigs = async (siteId?: string): Promise<OptimizationConfig[]> => {
+  const url = siteId
+    ? `${API_BASE_URL}/wizard/optimization/configs?site_id=${siteId}`
+    : `${API_BASE_URL}/wizard/optimization/configs`;
+  const response = await fetch(url, { headers: getAuthHeaders() });
+  if (!response.ok) throw new Error('Failed to fetch optimization configs');
+  const result = await response.json();
+  return result.configs || [];
 };

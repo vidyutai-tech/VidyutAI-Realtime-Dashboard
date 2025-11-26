@@ -48,10 +48,10 @@ const SolarDegradationCurves: React.FC<SolarDegradationCurvesProps> = ({
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Soiling Index</span>
           </div>
           <div className="text-2xl font-bold text-gray-900 dark:text-white">
-            {(data[data.length - 1]?.soilingIndex * 100 || 0).toFixed(1)}%
+            {(data[data.length - 1]?.soilingIndex * 100 || 0).toFixed(2)}%
           </div>
           <div className={`text-xs mt-1 ${soilingTrend < 0 ? 'text-red-600' : 'text-green-600'}`}>
-            {soilingTrend > 0 ? '↑' : '↓'} {Math.abs(soilingTrend).toFixed(1)}% vs baseline
+            {soilingTrend > 0 ? '↑' : '↓'} {Math.abs(soilingTrend).toFixed(2)}% vs baseline
           </div>
         </div>
 
@@ -61,7 +61,7 @@ const SolarDegradationCurves: React.FC<SolarDegradationCurvesProps> = ({
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Thermal Derate</span>
           </div>
           <div className="text-2xl font-bold text-gray-900 dark:text-white">
-            {data[data.length - 1]?.thermalDerate.toFixed(1) || 0}%
+            {data[data.length - 1]?.thermalDerate.toFixed(2) || 0}%
           </div>
           <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
             Temperature impact
@@ -74,7 +74,7 @@ const SolarDegradationCurves: React.FC<SolarDegradationCurvesProps> = ({
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Efficiency Trend</span>
           </div>
           <div className="text-2xl font-bold text-gray-900 dark:text-white">
-            {data[data.length - 1]?.efficiency.toFixed(1) || 0}%
+            {data[data.length - 1]?.efficiency.toFixed(2) || 0}%
           </div>
           <div className={`text-xs mt-1 ${efficiencyTrend < 0 ? 'text-red-600' : 'text-green-600'}`}>
             {efficiencyTrend > 0 ? '↑' : '↓'} {Math.abs(efficiencyTrend).toFixed(2)}% degradation
@@ -92,12 +92,14 @@ const SolarDegradationCurves: React.FC<SolarDegradationCurvesProps> = ({
             <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
             <XAxis
               dataKey="date"
+              label={{ value: 'Date', position: 'insideBottom', offset: -5 }}
               tick={{ fill: 'currentColor', fontSize: 12 }}
               interval="preserveStartEnd"
             />
             <YAxis
               label={{ value: 'Percentage (%)', angle: -90, position: 'insideLeft' }}
               tick={{ fill: 'currentColor' }}
+              tickFormatter={(value) => Number(value).toFixed(2)}
             />
             <Tooltip
               contentStyle={{
@@ -105,6 +107,7 @@ const SolarDegradationCurves: React.FC<SolarDegradationCurvesProps> = ({
                 border: '1px solid #ccc',
                 borderRadius: '8px',
               }}
+              formatter={(value: any) => Number(value).toFixed(2)}
             />
             <Legend />
             <Line
@@ -151,7 +154,7 @@ const SolarDegradationCurves: React.FC<SolarDegradationCurvesProps> = ({
                 : 'Panels are clean. Optimal performance.'}
             </p>
             <p>
-              <strong>Thermal Derate:</strong> Operating at {data[data.length - 1].thermalDerate.toFixed(1)}% derate due to temperature.
+              <strong>Thermal Derate:</strong> Operating at {data[data.length - 1].thermalDerate.toFixed(2)}% derate due to temperature.
               {data[data.length - 1].thermalDerate > 15 ? ' High temperature impact - consider ventilation.' : ' Within normal range.'}
             </p>
             <p>

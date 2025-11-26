@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 import Footer from './components/layout/Footer';
@@ -21,11 +21,23 @@ import ManageAssetsPage from './pages/ManageAssetsPage';
 import DigitalTwinPage from './pages/DigitalTwinPage';
 import DemandOptimizationPage from './pages/DemandOptimizationPage';
 import SourceOptimizationPage from './pages/SourceOptimizationPage';
+import PostLoginWizardPage from './pages/PostLoginWizardPage';
+import PlanningWizardPage from './pages/PlanningWizardPage';
+import OptimizationSetupPage from './pages/OptimizationSetupPage';
+import OptimizationResultsPage from './pages/OptimizationResultsPage';
+import PlanningAndOptimizationPage from './pages/PlanningAndOptimizationPage';
+import MainOptionsPage from './pages/MainOptionsPage';
+import OptimizationFlowPage from './pages/OptimizationFlowPage';
+import AIMLInsightsPage from './pages/AIMLInsightsPage';
+import UnifiedDashboardPage from './pages/UnifiedDashboardPage';
+import AIRecommendationsPage from './pages/AIRecommendationsPage';
+import RenewableOptimizationPage from './pages/RenewableOptimizationPage';
+import AIExplanationsPage from './pages/AIExplanationsPage';
 import { AppContext } from './contexts/AppContext';
 import { Telemetry, Alert, RLSuggestion, HealthStatus, Site, RLStrategy } from './types';
 import { useWebSocket } from './hooks/useWebSocket';
 import { GoogleGenAI } from '@google/genai';
-import { fetchHealthStatus, fetchSites, User } from './services/api';
+import { fetchHealthStatus, fetchSites, User, getUserProfile } from './services/api';
 import { io, Socket } from 'socket.io-client';
 
 const App: React.FC = () => {
@@ -38,14 +50,17 @@ const App: React.FC = () => {
     return storedUser ? JSON.parse(storedUser) : null;
   });
   const [isSidebarOpen, setSidebarOpen] = useState<boolean>(false);
-  
+
   const [sites, setSites] = useState<Site[]>([]);
   const [selectedSite, setSelectedSite] = useState<Site | null>(null);
+  const [hasCompletedWizard, setHasCompletedWizard] = useState<boolean | null>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [flowCompleted, setFlowCompleted] = useState<boolean>(false);
 
   const [theme, setTheme] = useState<'light' | 'dark'>(
     'light'
   );
-  
+
   const [currency, setCurrency] = useState<'USD' | 'EUR' | 'INR'>(
     'INR'
   );
@@ -53,258 +68,149 @@ const App: React.FC = () => {
   const [rlStrategy, setRlStrategy] = useState<RLStrategy>({
     cost_priority: 70,
     grid_stability_priority: 20,
-    battery_longevity_priority: 10,
+    battery_life_priority: 10,
   });
-  
-  const [ai] = useState<GoogleGenAI | null>(() => 
-    process.env.API_KEY ? new GoogleGenAI({ apiKey: process.env.API_KEY }) : null
-  );
 
-  useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.remove('light', 'dark');
-    root.classList.add(theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-  
-  useEffect(() => {
-    localStorage.setItem('currency', currency);
-  }, [currency]);
-
-  useEffect(() => {
-    const getSites = async () => {
-      if (isAuthenticated) {
-        try {
-            const fetchedSites = await fetchSites();
-            setSites(fetchedSites);
-        } catch (error) {
-            console.error("Failed to fetch sites:", error);
-            setSites([]);
-        }
-      } else {
-        setSites([]);
-        setSelectedSite(null);
-      }
-    };
-    getSites();
-  }, [isAuthenticated]);
-
-  useEffect(() => {
-      if (sites.length > 0) {
-          const storedSiteId = localStorage.getItem('selectedSiteId');
-          if (storedSiteId) {
-              const site = sites.find(s => s.id === storedSiteId);
-              if(site) setSelectedSite(site);
-          }
-      }
-  }, [sites]);
-
-
+  const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
   const [latestTelemetry, setLatestTelemetry] = useState<Telemetry | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [rlSuggestion, setRlSuggestion] = useState<RLSuggestion | null>(null);
-  const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
   const [suggestions, setSuggestions] = useState<RLSuggestion[]>([]);
   const [socket, setSocket] = useState<Socket | null>(null);
 
-  // Socket.IO connection for real-time updates
+  // Check wizard completion status
   useEffect(() => {
-    if (!isAuthenticated || !selectedSite) {
-      if (socket) {
-        socket.disconnect();
-        setSocket(null);
-      }
-      return;
-    }
-
-    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api/v1';
-    const WS_URL = API_BASE_URL.replace('/api/v1', '').replace('http://', 'http://').replace('https://', 'https://');
-    
-    console.log('🔌 Connecting to Socket.IO:', WS_URL);
-    const newSocket = io(WS_URL, {
-      transports: ['websocket', 'polling'],
-    });
-
-    newSocket.on('connect', () => {
-      console.log('✅ Socket.IO connected:', newSocket.id);
-      // Subscribe to site updates
-      newSocket.emit('subscribe_site', selectedSite.id);
-    });
-
-    newSocket.on('disconnect', () => {
-      console.log('❌ Socket.IO disconnected');
-    });
-
-    newSocket.on('connect_error', (error) => {
-      console.error('❌ Socket.IO connection error:', error);
-    });
-
-    // Listen for real-time metrics updates
-    newSocket.on('metrics_update', (data: any) => {
-      console.log('📊 Real-time metrics update:', data);
-      
-      // Update health status with new metrics
-      if (data.metrics) {
-        setHealthStatus((prev) => {
-          if (!prev) return prev;
-          return {
-            ...prev,
-            grid_draw: data.metrics.grid_draw?.value || prev.grid_draw,
-            battery_soc: data.metrics.soc?.value || prev.battery_soc,
-            pv_generation_today: data.metrics.pv_generation?.value || prev.pv_generation_today,
-            site_health: prev.site_health, // Keep existing
-          };
-        });
-
-        // Update latest telemetry
-        setLatestTelemetry({
-          timestamp: data.timestamp,
-          metrics: {
-            pv_generation: data.metrics.pv_generation?.value || 0,
-            net_load: data.metrics.net_load?.value || 0,
-            battery_discharge: data.metrics.battery_discharge?.value || 0,
-            grid_draw: data.metrics.grid_draw?.value || 0,
-            soc: data.metrics.soc?.value || 0,
-            voltage: data.metrics.voltage?.value || 0,
-            current: data.metrics.current?.value || 0,
-            frequency: data.metrics.frequency?.value || 0,
-          },
-        });
-      }
-    });
-
-    setSocket(newSocket);
-
-    return () => {
-      console.log('🔌 Disconnecting Socket.IO');
-      newSocket.disconnect();
-    };
-  }, [isAuthenticated, selectedSite]);
-
-  useEffect(() => {
-    const getHealthStatus = async () => {
-      if (isAuthenticated && selectedSite) {
-        try {
-          const status = await fetchHealthStatus(selectedSite.id);
-          setHealthStatus(status);
-        } catch (error) {
-          console.error('Failed to fetch health status:', error);
-        }
-      } else {
-        setHealthStatus(null);
-      }
-    };
-    
-    // Initial fetch
-    getHealthStatus();
-
-    // Fallback polling every 60 seconds (Socket.IO is primary)
-    if (isAuthenticated && selectedSite) {
-      const interval = setInterval(getHealthStatus, 60000);
-      return () => clearInterval(interval);
-    }
-  }, [isAuthenticated, selectedSite]);
-
-  const login = (token: string, user?: User) => {
-    localStorage.setItem('jwt', token);
-    if (user) {
-      localStorage.setItem('user', JSON.stringify(user));
-      setCurrentUser(user);
-    }
-    setIsAuthenticated(true);
-  };
-
-  const logout = () => {
-    localStorage.removeItem('jwt');
-    localStorage.removeItem('user');
-    localStorage.removeItem('selectedSiteId');
-    setIsAuthenticated(false);
-    setCurrentUser(null);
-    setSelectedSite(null);
-  };
-  
-  const selectSite = (site: Site | null) => {
-      if (site) {
-        localStorage.setItem('selectedSiteId', site.id);
-        setSelectedSite(site);
-      } else {
-        localStorage.removeItem('selectedSiteId');
-        setSelectedSite(null);
-      }
-  };
-
-  const handleWebSocketMessage = useCallback((event: MessageEvent) => {
-    try {
-      const data = JSON.parse(event.data);
-      switch (data.type) {
-        case 'telemetry_update':
-          setLatestTelemetry(data.payload);
-          break;
-        case 'alert':
-          setAlerts(prevAlerts => [data.payload, ...prevAlerts]);
-          break;
-        case 'rl_suggestion':
-          setSuggestions(prevSuggestions => [data.payload, ...prevSuggestions]);
-          break;
-        default:
-          break;
-      }
-    } catch (error) {
-      console.error('Error processing WebSocket message:', error);
-    }
+    const completed = localStorage.getItem('hasCompletedWizard');
+    setHasCompletedWizard(completed === 'true');
   }, []);
 
-  const token = localStorage.getItem('jwt');
-  // Socket.IO connection status
-  const connectionStatus = socket?.connected ? 'connected' : (isAuthenticated && selectedSite ? 'connecting' : 'disconnected');
+  // Load user profile
+  useEffect(() => {
+    if (isAuthenticated) {
+      getUserProfile()
+        .then(profile => {
+          if (profile) {
+            setUserProfile(profile);
+          }
+        })
+        .catch(err => console.error('Failed to load user profile:', err));
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth >= 768) {
         setSidebarOpen(true);
-      } else {
-        setSidebarOpen(false);
       }
     };
-    window.addEventListener('resize', handleResize);
     handleResize();
+    window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-  
-  const appContextValue = {
-    isAuthenticated,
-    currentUser,
-    login,
-    logout,
-    connectionStatus,
-    latestTelemetry,
-    alerts,
-    rlSuggestion,
-    setAlerts,
-    setRlSuggestion,
-     suggestions,
-    setSuggestions,
-    theme,
-    setTheme,
-    currency,
-    setCurrency,
-    ai,
-    healthStatus,
-    sites,
-    setSites,
-    selectedSite,
-    selectSite,
-    rlStrategy,
-    setRlStrategy,
+
+  useEffect(() => {
+    if (isAuthenticated && selectedSite) {
+      const token = localStorage.getItem('jwt');
+      const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5001';
+      const newSocket = io(socketUrl, {
+        auth: { token },
+        query: { siteId: selectedSite.id },
+      });
+
+      newSocket.on('connect', () => {
+        console.log('✅ Socket.IO connected');
+      });
+
+      newSocket.on('disconnect', () => {
+        console.log('❌ Socket.IO disconnected');
+      });
+
+      newSocket.on('telemetry_update', (data: Telemetry) => {
+        setLatestTelemetry(data);
+      });
+
+      newSocket.on('alert', (data: Alert) => {
+        setAlerts(prev => [data, ...prev]);
+      });
+
+      newSocket.on('rl_suggestion', (data: RLSuggestion) => {
+        setSuggestions(prev => [data, ...prev]);
+      });
+
+      setSocket(newSocket);
+
+      return () => {
+        newSocket.close();
+      };
+    }
+  }, [isAuthenticated, selectedSite]);
+
+  useEffect(() => {
+    if (isAuthenticated && selectedSite) {
+      const loadHealthStatus = async () => {
+        try {
+          const status = await fetchHealthStatus(selectedSite.id);
+          setHealthStatus(status);
+        } catch (error) {
+          console.error('Failed to load health status:', error);
+        }
+      };
+      loadHealthStatus();
+      const interval = setInterval(loadHealthStatus, 600000); // 10 minutes
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated, selectedSite]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchSites()
+        .then(setSites)
+        .catch(err => console.error('Failed to fetch sites:', err));
+    }
+  }, [isAuthenticated]);
+
+  const login = (user: User, token: string) => {
+    setIsAuthenticated(true);
+    setCurrentUser(user);
+    localStorage.setItem('jwt', token);
+    localStorage.setItem('user', JSON.stringify(user));
+    setShowLanding(false);
+    setShowSignup(false);
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setSelectedSite(null);
+    setHasCompletedWizard(null);
+    localStorage.removeItem('jwt');
+    localStorage.removeItem('user');
+    localStorage.removeItem('selectedSite');
+    localStorage.removeItem('hasCompletedWizard');
+    if (socket) {
+      socket.close();
+      setSocket(null);
+    }
+    setShowLanding(true);
+  };
+
+  const selectSite = (site: Site | null) => {
+    setSelectedSite(site);
+    if (site) {
+      localStorage.setItem('selectedSite', JSON.stringify(site));
+    } else {
+      localStorage.removeItem('selectedSite');
+    }
   };
 
   const handleGetStarted = () => {
-    localStorage.setItem('hasSeenLanding', 'true');
     setShowLanding(false);
+    setShowSignup(false);
+    if (!isAuthenticated) {
+      // Show login page
+    }
   };
 
   const handleBackToLanding = () => {
-    localStorage.removeItem('hasSeenLanding');
     setShowLanding(true);
     setShowSignup(false);
     setShowSignupSuccess(false);
@@ -312,77 +218,149 @@ const App: React.FC = () => {
 
   const handleShowSignup = () => {
     setShowSignup(true);
-    setShowSignupSuccess(false);
+  };
+
+  const handleSignupSuccess = () => {
+    setShowSignupSuccess(true);
+    setShowSignup(false);
   };
 
   const handleBackToLogin = () => {
     setShowSignup(false);
+    setShowSignupSuccess(false);
   };
 
-  const handleSignupSuccess = () => {
-    setShowSignup(false);
-    setShowSignupSuccess(true);
+  const appContextValue = {
+    currentUser,
+    isAuthenticated,
+    sites,
+    selectedSite,
+    selectSite,
+    healthStatus,
+    latestTelemetry,
+    alerts,
+    suggestions,
+    setSuggestions,
+    currency,
+    setCurrency,
+    theme,
+    setTheme,
+    rlStrategy,
+    setRlStrategy,
+    connectionStatus: socket?.connected ? 'connected' : (isAuthenticated && selectedSite ? 'connecting' : 'disconnected'),
+    logout,
+  };
+
+  // Layout wrapper component that conditionally shows sidebar
+  const LayoutWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const location = useLocation();
+    const isMainOptions = location.pathname === '/main-options' || location.pathname === '/';
+    
+    if (isMainOptions) {
+      // Main Options - NO SIDEBAR, NO HEADER, NO FOOTER
+      return <>{children}</>;
+    }
+    
+    // All other pages - WITH SIDEBAR, HEADER, FOOTER
+    return (
+      <div className="flex h-screen flex-col">
+        <div className="flex flex-1 overflow-hidden">
+          <Sidebar isOpen={isSidebarOpen} setSidebarOpen={setSidebarOpen} />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <Header onToggleSidebar={() => setSidebarOpen(!isSidebarOpen)} />
+            <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-800 p-4 md:p-6 lg:p-8">
+              {children}
+            </main>
+            <Footer />
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderContent = () => {
-      if (showLanding) {
-          return <LandingPage onGetStarted={handleGetStarted} />;
-      }
-      if (showSignup) {
-          return (
-            <SignupPage 
-              onSignupSuccess={handleSignupSuccess} 
-              onBackToLogin={handleBackToLogin}
-              onBack={handleBackToLanding}
-            />
-          );
-      }
-      if (!isAuthenticated) {
-          return (
-            <LoginPage 
-              onLogin={login} 
-              onBack={handleBackToLanding}
-              onSignupClick={handleShowSignup}
-              showSignupSuccess={showSignupSuccess}
-            />
-          );
-      }
-      if (!selectedSite) {
-          return <SiteSelectPage />;
-      }
+    if (showLanding) {
+      return <LandingPage onGetStarted={handleGetStarted} />;
+    }
+    if (showSignup) {
+      return (
+        <SignupPage
+          onSignupSuccess={handleSignupSuccess}
+          onBackToLogin={handleBackToLogin}
+          onBack={handleBackToLanding}
+        />
+      );
+    }
+    if (!isAuthenticated) {
+      return (
+        <LoginPage
+          onLogin={login}
+          onBack={handleBackToLanding}
+          onSignupClick={handleShowSignup}
+          showSignupSuccess={showSignupSuccess}
+        />
+      );
+    }
+    
+    // Post-Login Wizard (if not completed)
+    if (hasCompletedWizard === false) {
       return (
         <HashRouter>
-            <div className="flex h-screen flex-col">
-                <div className="flex flex-1 overflow-hidden">
-                    <Sidebar isOpen={isSidebarOpen} setSidebarOpen={setSidebarOpen} />
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                        <Header onToggleSidebar={() => setSidebarOpen(!isSidebarOpen)} />
-                        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-800 p-4 md:p-6 lg:p-8">
-                            <Routes>
-                                <Route path="/" element={<Navigate to="/dashboard" />} />
-                                <Route path="/dashboard" element={<DashboardPage />} />
-                                <Route path="/site-detail" element={<SiteDetailPage />} />
-                                <Route path="/impact" element={<ImpactPage />} />
-                                <Route path="/digital-twin" element={<DigitalTwinPage />} />
-                                <Route path="/demand-optimization" element={<DemandOptimizationPage />} />
-                                <Route path="/source-optimization" element={<SourceOptimizationPage />} />
-                                <Route path="/alerts" element={<AlertsPage />} />
-                                <Route path="/maintenance" element={<MaintenancePage />} />
-                                <Route path="/simulator" element={<SimulatorPage />} />
-                                <Route path="/predictions" element={<PredictionsPage />} />
-                                <Route path="/manage-sites" element={<ManageSitesPage />} />
-                                <Route path="/manage-assets" element={<ManageAssetsPage />} />
-                                <Route path="/profile" element={<ProfilePage />} />
-                                <Route path="/settings" element={<SettingsPage />} />
-                            </Routes>
-                        </main>
-                        <Footer />
-                    </div>
-                </div>
-            </div>
+          <Routes>
+            <Route path="*" element={
+              <PostLoginWizardPage 
+                onComplete={() => {
+                  setHasCompletedWizard(true);
+                  // Update localStorage
+                  localStorage.setItem('hasCompletedWizard', 'true');
+                  // Navigate using window.location since we're in a separate router
+                  setTimeout(() => {
+                    window.location.hash = '#/main-options';
+                  }, 100);
+                }} 
+              />
+            } />
+          </Routes>
         </HashRouter>
       );
-  }
+    }
+    
+    // Main application with routing
+    return (
+      <HashRouter>
+        <LayoutWrapper>
+          <Routes>
+            <Route path="/" element={<Navigate to="/main-options" />} />
+            <Route path="/main-options" element={<MainOptionsPage />} />
+            <Route path="/planning-wizard" element={<PlanningWizardPage />} />
+            <Route path="/optimization-flow" element={<OptimizationFlowPage />} />
+            <Route path="/optimization-setup" element={<OptimizationSetupPage />} />
+            <Route path="/optimization-results" element={<OptimizationResultsPage />} />
+            <Route path="/demand-optimization" element={<DemandOptimizationPage />} />
+            <Route path="/source-optimization" element={<SourceOptimizationPage />} />
+            <Route path="/ai-ml-insights" element={<AIMLInsightsPage />} />
+            <Route path="/ai-recommendations" element={<AIRecommendationsPage />} />
+            <Route path="/renewable-optimization" element={<RenewableOptimizationPage />} />
+            <Route path="/ai-explanations" element={<AIExplanationsPage />} />
+            <Route path="/unified-dashboard" element={<UnifiedDashboardPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/site-detail" element={<SiteDetailPage />} />
+            <Route path="/impact" element={<ImpactPage />} />
+            <Route path="/digital-twin" element={<DigitalTwinPage />} />
+            <Route path="/planning-optimization" element={<PlanningAndOptimizationPage />} />
+            <Route path="/alerts" element={<AlertsPage />} />
+            <Route path="/maintenance" element={<MaintenancePage />} />
+            <Route path="/simulator" element={<SimulatorPage />} />
+            <Route path="/predictions" element={<PredictionsPage />} />
+            <Route path="/manage-sites" element={<ManageSitesPage />} />
+            <Route path="/manage-assets" element={<ManageAssetsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Routes>
+        </LayoutWrapper>
+      </HashRouter>
+    );
+  };
 
   return (
     <AppContext.Provider value={appContextValue}>

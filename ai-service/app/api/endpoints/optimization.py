@@ -256,7 +256,7 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
 
     co2_kg_per_kwh = {
         "grid": 0.716,
-        "diesel": 0.787, #0.787 kg/kwh
+        "diesel": 0.9,  # Matching notebook: 0.9 kg CO2/kWh
         "battery": 0.029,
         "solar": 0.046,
         "fuel_cell": 0.001,
@@ -377,8 +377,8 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
     electrolyzer_om_total = total_h2_produced_kwh_input * electrolyzer_om_cost
     round_trip_efficiency_h2 = (total_h2_consumed_kwh_output / total_h2_produced_kwh_input * 100) if total_h2_produced_kwh_input > 0 else 0
     
-    # Cost calculations (matching  )
-    grid_cost = sum(max(0.0, results['Grid_Power'][t]) * price_profile[t] * step_size for t in range(time_horizon))
+    # Cost calculations (matching notebook - allows negative grid power for exports)
+    grid_cost = sum(results['Grid_Power'][t] * price_profile[t] * step_size for t in range(time_horizon))
     pv_cost = total_pv_used * pv_energy_cost
     curtail_kwh = sum(results['Load_Curtailed']) * step_size
     curtail_cost_total = curtail_kwh * load_curtail_cost
@@ -561,22 +561,7 @@ def run_optimization(params, load_profile_24h, price_profile_24h, solar_profile_
     plot_bytes = buf.read()
     plt.close()
 
-    # Build chart_data for frontend area chart
-    base_time = datetime.now().replace(minute=0, second=0, microsecond=0)
-    chart_data = []
-    for t in T:
-        ts = base_time + timedelta(minutes=t * time_resolution_minutes)
-        chart_data.append({
-            "timestamp": ts.isoformat(),
-            "load_kwh": float(load_profile[t]) * step_size,
-            "solar_kwh": float(value(P_pv_used[t])) * step_size,
-            "grid_kwh": float(max(0.0, value(P_grid[t]))) * step_size,
-            "battery_discharge_kwh": float(value(P_discharge[t])) * step_size,
-            "battery_charge_kwh": float(value(P_charge[t])) * step_size,
-            "battery_soc_percent": float(results['Battery_SOC'][t]),
-        })
-
-    return summary, plot_bytes, chart_data
+    return summary, plot_bytes
 
 
 @router.post("/optimize")
@@ -667,8 +652,24 @@ async def optimize(
                     solar_connection = float(params.get("solar_connection", 2000)) if 'params' in locals() else 2000.0
                 solar_profile_input = [max(0.0, min(1.0, v / solar_connection)) for v in raw_solar]
             else:
-                # Assume already normalized
-                solar_profile_input = [max(0.0, min(1.0, v)) for v in raw_solar]
+                # Assume already normalized (0-1)
+                # Scale gradually to match weather condition's typical profile peak
+                # This preserves the shape while allowing gradual scaling based on weather
+                weather_lower = str(weather).lower()
+                if weather_lower == "sunny":
+                    target_peak = 1.0  # Sunny days can reach full capacity
+                elif weather_lower == "cloudy":
+                    target_peak = 0.7  # Cloudy days typically peak at ~70%
+                else:  # rainy
+                    target_peak = 0.3  # Rainy days typically peak at ~30%
+                
+                if max_val > 0 and max_val < target_peak:
+                    # Scale gradually: scale the profile to match weather-appropriate peak
+                    scale_factor = target_peak / max_val
+                    solar_profile_input = [max(0.0, min(1.0, v * scale_factor)) for v in raw_solar]
+                else:
+                    # Use as-is if already at or above target peak, or if all zeros
+                    solar_profile_input = [max(0.0, min(1.0, v)) for v in raw_solar]
 
         # Fallback: infer days if timestamp missing
         if not datetime_col:
@@ -702,7 +703,7 @@ async def optimize(
 
     # Run Optimization + Generate Plot
     try:
-        summary, plot_bytes, chart_data = run_optimization(params, load_profile, price_profile, solar_profile_input)
+        summary, plot_bytes = run_optimization(params, load_profile, price_profile, solar_profile_input)
 
         # Debug: Verify emissions are in summary
         if "Emissions" in summary:
@@ -716,8 +717,7 @@ async def optimize(
         return JSONResponse({
             "status": "success",
             "summary": summary,
-            "plot_base64": plot_base64,
-            "chart_data": chart_data
+            "plot_base64": plot_base64
         })
 
     except ValueError as e:

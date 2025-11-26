@@ -40,7 +40,7 @@ const WeatherCard: React.FC<WeatherCardProps> = ({ weather, isLoading }) => {
                     <div>
                         <p className="text-sm text-gray-500 dark:text-gray-400">{weather.location}</p>
                         <p className="text-4xl font-bold text-gray-900 dark:text-white">
-                            {weather.temperature.toFixed(0)}°C
+                            {weather.temperature.toFixed(2)}°C
                         </p>
                         <p className="font-semibold text-gray-700 dark:text-gray-300 capitalize">
                             {weather.condition}

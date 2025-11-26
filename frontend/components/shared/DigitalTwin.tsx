@@ -21,9 +21,10 @@ const DataPoint: React.FC<{ point: DigitalTwinDataPoint }> = ({ point }) => {
     }
 
     const getIcon = (label: string) => {
-        if (label.toLowerCase().includes('temp')) return <Thermometer className="w-4 h-4 text-gray-500 dark:text-gray-400" />;
-        if (label.toLowerCase().includes('speed')) return <Rss className="w-4 h-4 text-gray-500 dark:text-gray-400" />;
-        if (label.toLowerCase().includes('vib')) return <BarChart className="w-4 h-4 text-gray-500 dark:text-gray-400" />;
+        const labelLower = (label || '').toLowerCase();
+        if (labelLower.includes('temp')) return <Thermometer className="w-4 h-4 text-gray-500 dark:text-gray-400" />;
+        if (labelLower.includes('speed')) return <Rss className="w-4 h-4 text-gray-500 dark:text-gray-400" />;
+        if (labelLower.includes('vib')) return <BarChart className="w-4 h-4 text-gray-500 dark:text-gray-400" />;
         return <Zap className="w-4 h-4 text-gray-500 dark:text-gray-400" />;
     };
 
@@ -33,15 +34,15 @@ const DataPoint: React.FC<{ point: DigitalTwinDataPoint }> = ({ point }) => {
                 <div className={`w-full h-full p-2 rounded-lg shadow-lg flex flex-col justify-center items-center 
                                  border-2 transition-colors duration-300 ${colorClass.replace('text-', 'border-')} ${bgClass}`}>
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        {getIcon(point.label)}
-                        <span>{point.label}</span>
+                        {getIcon(point.label || '')}
+                        <span>{point.label || 'Unknown'}</span>
                     </div>
                     <div className="flex items-baseline font-mono">
-                        <span className="text-xl font-bold text-gray-900 dark:text-white">{point.real_value.toFixed(1)}</span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">/{point.predicted_value.toFixed(1)} {point.unit}</span>
+                        <span className="text-xl font-bold text-gray-900 dark:text-white">{point.real_value.toFixed(2)}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">/{point.predicted_value.toFixed(2)} {point.unit || ''}</span>
                     </div>
                     <div className={`text-xs font-bold ${colorClass}`}>
-                        {deviation > 0 ? '▲' : '▼'} {Math.abs(deviation).toFixed(1)}%
+                        {deviation > 0 ? '▲' : '▼'} {Math.abs(deviation).toFixed(2)}%
                     </div>
                 </div>
             </foreignObject>
@@ -83,12 +84,12 @@ const DigitalTwin: React.FC<DigitalTwinProps> = ({ dataPoints }) => {
             </g>
 
             <g>
-                {dataPoints.map(point => {
+                {dataPoints.map((point, index) => {
                     const anchor = getAnchorPoint(point);
                     const pathData = `M ${anchor.x} ${anchor.y} Q ${anchor.x} ${point.y}, ${point.x - 10 * Math.sign(point.x - (asset.x + asset.width/2))} ${point.y}`;
                     return (
                         <path
-                            key={`line-${point.id}`}
+                            key={`line-${point.id || point.label || index}`}
                             d={pathData}
                             className="stroke-current text-gray-400 dark:text-gray-500"
                             strokeWidth="1.5"
@@ -100,8 +101,8 @@ const DigitalTwin: React.FC<DigitalTwinProps> = ({ dataPoints }) => {
             </g>
             
             <g>
-                {dataPoints.map(point => (
-                    <DataPoint key={point.id} point={point} />
+                {dataPoints.map((point, index) => (
+                    <DataPoint key={point.id || point.label || `point-${index}`} point={point} />
                 ))}
             </g>
         </svg>

@@ -168,3 +168,77 @@ CREATE TABLE IF NOT EXISTS system_settings (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- User Profile table (extends users with site type and preferences)
+CREATE TABLE IF NOT EXISTS user_profiles (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL UNIQUE,
+    site_type TEXT CHECK(site_type IN ('home', 'college', 'small_industry', 'large_industry', 'power_plant', 'other')),
+    workflow_preference TEXT CHECK(workflow_preference IN ('plan_new', 'optimize_existing')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Load Profile table (for appliance and load data)
+CREATE TABLE IF NOT EXISTS load_profiles (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    site_id TEXT,
+    name TEXT NOT NULL,
+    category_totals TEXT NOT NULL, -- JSON string: {lighting: {...}, fans: {...}, etc.}
+    total_daily_energy_kwh REAL NOT NULL,
+    appliances TEXT NOT NULL, -- JSON string: array of appliance objects
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE SET NULL
+);
+
+-- Planning Recommendation table (output from planning wizard)
+CREATE TABLE IF NOT EXISTS planning_recommendations (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    site_id TEXT,
+    load_profile_id TEXT NOT NULL,
+    preferred_sources TEXT NOT NULL, -- JSON string: array of sources
+    primary_goal TEXT CHECK(primary_goal IN ('savings', 'self_sustainability', 'reliability', 'carbon_reduction')),
+    allow_diesel BOOLEAN DEFAULT 0,
+    technical_sizing TEXT NOT NULL, -- JSON string
+    economic_analysis TEXT NOT NULL, -- JSON string
+    emissions_analysis TEXT NOT NULL, -- JSON string
+    scenario_link TEXT, -- Link to optimization scenario
+    status TEXT CHECK(status IN ('draft', 'saved', 'applied')) DEFAULT 'draft',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE SET NULL,
+    FOREIGN KEY (load_profile_id) REFERENCES load_profiles(id) ON DELETE CASCADE
+);
+
+-- Optimization Config table (for optimization setup)
+CREATE TABLE IF NOT EXISTS optimization_configs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    site_id TEXT,
+    load_profile_id TEXT,
+    planning_recommendation_id TEXT,
+    load_data TEXT NOT NULL, -- JSON string
+    tariff_data TEXT NOT NULL, -- JSON string
+    pv_parameters TEXT, -- JSON string
+    battery_parameters TEXT, -- JSON string
+    grid_parameters TEXT, -- JSON string
+    objective TEXT CHECK(objective IN ('cost', 'co2', 'combination')) DEFAULT 'combination',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE SET NULL,
+    FOREIGN KEY (load_profile_id) REFERENCES load_profiles(id) ON DELETE SET NULL,
+    FOREIGN KEY (planning_recommendation_id) REFERENCES planning_recommendations(id) ON DELETE SET NULL
+);
+
+-- Create indexes for faster queries
+CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_load_profiles_user_id ON load_profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_planning_recommendations_user_id ON planning_recommendations(user_id);
+CREATE INDEX IF NOT EXISTS idx_optimization_configs_user_id ON optimization_configs(user_id);
+

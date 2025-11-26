@@ -121,7 +121,14 @@ function tableExists(tableName) {
 // Determine if the core schema has been created
 function isInitialized() {
   try {
-    return tableExists('users') && tableExists('sites') && tableExists('assets');
+    // Check for core tables and new wizard tables
+    return tableExists('users') && 
+           tableExists('sites') && 
+           tableExists('assets') &&
+           tableExists('load_profiles') &&
+           tableExists('user_profiles') &&
+           tableExists('planning_recommendations') &&
+           tableExists('optimization_configs');
   } catch (e) {
     return false;
   }
@@ -137,7 +144,26 @@ function ensureInitialized() {
     insertTimeseriesData();
     console.log('🗄️ Database initialization finished.');
   } else {
-    console.log('🗄️ Database already initialized.');
+    // Even if core tables exist, ensure all tables from schema exist
+    // This handles cases where new tables were added to the schema
+    console.log('🗄️ Core tables exist. Running migration to ensure all tables are up to date...');
+    try {
+      // Run migration to fix any schema mismatches
+      const { migrate } = require('./migrate');
+      migrate();
+      // Also run schema to ensure everything is in sync
+      createTables(); // This uses CREATE TABLE IF NOT EXISTS, so it's safe
+      console.log('🗄️ All schema tables verified and migrated.');
+    } catch (error) {
+      console.error('⚠️ Warning: Error during migration:', error.message);
+      // Fallback: try to create tables anyway
+      try {
+        createTables();
+        console.log('🗄️ Fallback: Schema tables created.');
+      } catch (fallbackError) {
+        console.error('❌ Fallback also failed:', fallbackError.message);
+      }
+    }
   }
 }
 

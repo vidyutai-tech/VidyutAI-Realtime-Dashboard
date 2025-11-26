@@ -33,7 +33,7 @@ const PredictionResult: React.FC<{ prediction: string | number | null; confidenc
         <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-r-md">
             <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Result:</p>
             <p className={`text-lg font-bold ${resultColor}`}>{prediction}</p>
-            {confidence && <p className="text-xs text-gray-500 dark:text-gray-400">Confidence: {(confidence * 100).toFixed(1)}%</p>}
+            {confidence && <p className="text-xs text-gray-500 dark:text-gray-400">Confidence: {(confidence * 100).toFixed(2)}%</p>}
         </div>
     )
 }
@@ -158,9 +158,23 @@ const PredictionsPage: React.FC = () => {
                                 <ResponsiveContainer width="100%" height="100%">
                                     <LineChart data={solarResult}>
                                         <CartesianGrid strokeDasharray="3 3" stroke={gridColor}/>
-                                        <XAxis dataKey="time" stroke={textColor} tick={{ fontSize: 12 }} interval={3}/>
-                                        <YAxis stroke={textColor} tick={{ fontSize: 12 }} label={{ value: 'kW', angle: -90, position: 'insideLeft', fill: textColor, fontSize: 12 }}/>
-                                        <Tooltip contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', border: `1px solid ${gridColor}` }}/>
+                                        <XAxis 
+                                          dataKey="time" 
+                                          label={{ value: 'Time', position: 'insideBottom', offset: -5 }}
+                                          stroke={textColor} 
+                                          tick={{ fontSize: 12 }} 
+                                          interval={3}
+                                        />
+                                        <YAxis 
+                                          stroke={textColor} 
+                                          tick={{ fontSize: 12 }} 
+                                          label={{ value: 'Power (kW)', angle: -90, position: 'insideLeft', fill: textColor, fontSize: 12 }}
+                                          tickFormatter={(value) => Number(value).toFixed(2)}
+                                        />
+                                        <Tooltip 
+                                          contentStyle={{ backgroundColor: theme === 'dark' ? '#1f2937' : '#ffffff', border: `1px solid ${gridColor}` }}
+                                          formatter={(value: any) => Number(value).toFixed(2)}
+                                        />
                                         <Line type="monotone" dataKey="power" stroke="#f97316" dot={false} strokeWidth={2}/>
                                     </LineChart>
                                 </ResponsiveContainer>

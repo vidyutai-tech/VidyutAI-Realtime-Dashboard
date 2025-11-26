@@ -34,11 +34,11 @@ const FlowLabel: React.FC<{ x: number, y: number, value: number, suggestedValue?
 
     return (
         <text x={x} y={y} textAnchor="middle" className="text-xs font-bold fill-current">
-            <tspan className="text-blue-600 dark:text-blue-300">{value.toFixed(1)}</tspan>
+            <tspan className="text-blue-600 dark:text-blue-300">{value.toFixed(2)}</tspan>
             {hasSuggestion && (
                 <>
                     <tspan className="text-gray-600 dark:text-gray-400"> → </tspan>
-                    <tspan className="text-pink-600 dark:text-pink-400">{suggestedValue.toFixed(1)}</tspan>
+                    <tspan className="text-pink-600 dark:text-pink-400">{suggestedValue.toFixed(2)}</tspan>
                 </>
             )}
              <tspan dy="10" x={x} className="text-gray-500 dark:text-gray-400">{unit}</tspan>
