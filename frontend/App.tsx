@@ -26,6 +26,7 @@ import { Telemetry, Alert, RLSuggestion, HealthStatus, Site, RLStrategy } from '
 import { useWebSocket } from './hooks/useWebSocket';
 import { GoogleGenAI } from '@google/genai';
 import { fetchHealthStatus, fetchSites, User } from './services/api';
+import { io, Socket } from 'socket.io-client';
 
 const App: React.FC = () => {
   const [showLanding, setShowLanding] = useState<boolean>(!localStorage.getItem('jwt') && !localStorage.getItem('hasSeenLanding'));
@@ -104,6 +105,81 @@ const App: React.FC = () => {
   const [rlSuggestion, setRlSuggestion] = useState<RLSuggestion | null>(null);
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
   const [suggestions, setSuggestions] = useState<RLSuggestion[]>([]);
+  const [socket, setSocket] = useState<Socket | null>(null);
+
+  // Socket.IO connection for real-time updates
+  useEffect(() => {
+    if (!isAuthenticated || !selectedSite) {
+      if (socket) {
+        socket.disconnect();
+        setSocket(null);
+      }
+      return;
+    }
+
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api/v1';
+    const WS_URL = API_BASE_URL.replace('/api/v1', '').replace('http://', 'http://').replace('https://', 'https://');
+    
+    console.log('🔌 Connecting to Socket.IO:', WS_URL);
+    const newSocket = io(WS_URL, {
+      transports: ['websocket', 'polling'],
+    });
+
+    newSocket.on('connect', () => {
+      console.log('✅ Socket.IO connected:', newSocket.id);
+      // Subscribe to site updates
+      newSocket.emit('subscribe_site', selectedSite.id);
+    });
+
+    newSocket.on('disconnect', () => {
+      console.log('❌ Socket.IO disconnected');
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.error('❌ Socket.IO connection error:', error);
+    });
+
+    // Listen for real-time metrics updates
+    newSocket.on('metrics_update', (data: any) => {
+      console.log('📊 Real-time metrics update:', data);
+      
+      // Update health status with new metrics
+      if (data.metrics) {
+        setHealthStatus((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            grid_draw: data.metrics.grid_draw?.value || prev.grid_draw,
+            battery_soc: data.metrics.soc?.value || prev.battery_soc,
+            pv_generation_today: data.metrics.pv_generation?.value || prev.pv_generation_today,
+            site_health: prev.site_health, // Keep existing
+          };
+        });
+
+        // Update latest telemetry
+        setLatestTelemetry({
+          timestamp: data.timestamp,
+          metrics: {
+            pv_generation: data.metrics.pv_generation?.value || 0,
+            net_load: data.metrics.net_load?.value || 0,
+            battery_discharge: data.metrics.battery_discharge?.value || 0,
+            grid_draw: data.metrics.grid_draw?.value || 0,
+            soc: data.metrics.soc?.value || 0,
+            voltage: data.metrics.voltage?.value || 0,
+            current: data.metrics.current?.value || 0,
+            frequency: data.metrics.frequency?.value || 0,
+          },
+        });
+      }
+    });
+
+    setSocket(newSocket);
+
+    return () => {
+      console.log('🔌 Disconnecting Socket.IO');
+      newSocket.disconnect();
+    };
+  }, [isAuthenticated, selectedSite]);
 
   useEffect(() => {
     const getHealthStatus = async () => {
@@ -119,8 +195,10 @@ const App: React.FC = () => {
       }
     };
     
+    // Initial fetch
     getHealthStatus();
 
+    // Fallback polling every 60 seconds (Socket.IO is primary)
     if (isAuthenticated && selectedSite) {
       const interval = setInterval(getHealthStatus, 60000);
       return () => clearInterval(interval);
@@ -177,13 +255,8 @@ const App: React.FC = () => {
   }, []);
 
   const token = localStorage.getItem('jwt');
-  // For now, show connected when authenticated since REST API is working
-  // WebSocket/Socket.IO integration can be added later if real-time updates are needed
-  const connectionStatus = isAuthenticated && selectedSite ? 'connected' : 'disconnected';
-  
-  // Commented out WebSocket connection (requires Socket.IO client library)
-  // const websocketUrl = selectedSite && token ? `ws://localhost:3000/ws/site/${selectedSite.id}?token=${token}` : '';
-  // const { connectionStatus } = useWebSocket(websocketUrl, handleWebSocketMessage, isAuthenticated && !!selectedSite);
+  // Socket.IO connection status
+  const connectionStatus = socket?.connected ? 'connected' : (isAuthenticated && selectedSite ? 'connecting' : 'disconnected');
 
   useEffect(() => {
     const handleResize = () => {

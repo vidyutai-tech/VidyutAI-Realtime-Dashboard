@@ -12,6 +12,7 @@ const authRoutes = require('./routes/auth');
 const sitesRoutes = require('./routes/sites');
 const metricsRoutes = require('./routes/metrics');
 const alertsRoutes = require('./routes/alerts');
+const mlAlertsRoutes = require('./routes/ml-alerts');
 const assetsRoutes = require('./routes/assets');
 const predictionsRoutes = require('./routes/predictions');
 const mlPredictionsRoutes = require('./routes/ml-predictions');
@@ -64,6 +65,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/sites', sitesRoutes);
 app.use('/api/v1/metrics', metricsRoutes);
 app.use('/api/v1/alerts', alertsRoutes);
+app.use('/api/v1/ml-alerts', mlAlertsRoutes);
 app.use('/api/v1/assets', assetsRoutes);
 app.use('/api/v1/predictions', predictionsRoutes);
 app.use('/api/v1/predict', mlPredictionsRoutes);
@@ -108,6 +110,10 @@ app.post('/api/v1/simulate', async (req, res) => {
   });
 });
 
+// Import real-time simulator
+const { getSimulator } = require('./services/realtime-simulator');
+const { getDatabase } = require('./database/db');
+
 // Socket.IO real-time updates
 io.on('connection', (socket) => {
   console.log('New client connected:', socket.id);
@@ -116,10 +122,28 @@ io.on('connection', (socket) => {
     socket.join(`site_${siteId}`);
     console.log(`Client ${socket.id} subscribed to site ${siteId}`);
     
-    // Send initial data
+    // Send initial data from database
+    const db = getDatabase();
+    const latestData = db.prepare(`
+      SELECT metric_type, metric_value, unit
+      FROM timeseries_data
+      WHERE site_id = ? AND timestamp >= datetime('now', '-1 minute')
+      ORDER BY timestamp DESC
+      LIMIT 20
+    `).all(siteId);
+    
+    const metrics = {};
+    latestData.forEach(row => {
+      metrics[row.metric_type] = {
+        value: row.metric_value,
+        unit: row.unit
+      };
+    });
+    
     socket.emit('site_data', {
       siteId,
       timestamp: new Date().toISOString(),
+      metrics,
       message: 'Connected to site updates'
     });
   });
@@ -129,20 +153,67 @@ io.on('connection', (socket) => {
   });
 });
 
-// Simulate real-time data updates (for development)
-if (process.env.NODE_ENV !== 'production') {
+// Real-time data updates from SQLite database
+if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_SIMULATOR === 'true') {
+  // Start the real-time simulator
+  const simulator = getSimulator(5000); // 5 second intervals
+  simulator.start();
+  
+  // Broadcast latest data from database every 5 seconds
   setInterval(() => {
-    const mockData = {
+    const db = getDatabase();
+    const sites = db.prepare('SELECT id FROM sites WHERE status = ?').all('online');
+    
+    sites.forEach(site => {
+      const siteId = site.id;
+      
+      // Get latest metrics from database
+      const latestData = db.prepare(`
+        SELECT metric_type, metric_value, unit
+        FROM timeseries_data
+        WHERE site_id = ? AND timestamp >= datetime('now', '-10 seconds')
+        ORDER BY timestamp DESC
+        LIMIT 10
+      `).all(siteId);
+      
+      if (latestData.length > 0) {
+        const metrics = {};
+        latestData.forEach(row => {
+          metrics[row.metric_type] = {
+            value: row.metric_value,
+            unit: row.unit
+          };
+        });
+        
+        // Calculate derived metrics
+        const pvGen = metrics.pv_generation?.value || 0;
+        const netLoad = metrics.net_load?.value || 0;
+        const gridDraw = metrics.grid_draw?.value || 0;
+        const batteryDischarge = metrics.battery_discharge?.value || 0;
+        
+        const realtimeData = {
       timestamp: new Date().toISOString(),
-      power: (1000 + Math.random() * 500).toFixed(2),
-      energy: (15000 + Math.random() * 2000).toFixed(2),
-      efficiency: (85 + Math.random() * 10).toFixed(2),
-      cost: (45 + Math.random() * 10).toFixed(2)
+          siteId,
+          power: (pvGen + gridDraw + batteryDischarge).toFixed(2),
+          energy: (netLoad * 0.5).toFixed(2), // Approximate energy
+          efficiency: metrics.soc?.value ? (85 + (metrics.soc.value / 100) * 10).toFixed(2) : '85.00',
+          cost: ((gridDraw * 0.1) + (batteryDischarge * 0.05)).toFixed(2),
+          metrics: metrics
     };
     
-    // Broadcast to all connected clients
-    io.emit('metrics_update', mockData);
+        // Broadcast to site-specific room
+        io.to(`site_${siteId}`).emit('metrics_update', realtimeData);
+        
+        // Also broadcast globally
+        io.emit('metrics_update', realtimeData);
+      }
+    });
   }, 5000);
+  
+  // Clean old data every hour (keep last 48 hours)
+  setInterval(() => {
+    simulator.cleanOldData(48);
+  }, 60 * 60 * 1000);
 }
 
 // Error handling middleware
@@ -162,7 +233,7 @@ app.use((req, res) => {
 });
 
 // Start server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 server.listen(PORT, () => {
   console.log(`🚀 Backend server running on port ${PORT}`);
   console.log(`📊 API: http://localhost:${PORT}/api/v1`);

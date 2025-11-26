@@ -28,6 +28,9 @@ interface AppContextType {
   // NEW: Enhanced RL
   rlStrategy: RLStrategy;
   setRlStrategy: React.Dispatch<React.SetStateAction<RLStrategy>>;
+  // RL Suggestions
+  suggestions: RLSuggestion[];
+  setSuggestions: React.Dispatch<React.SetStateAction<RLSuggestion[]>>;
 }
 
 export const AppContext = createContext<AppContextType | null>(null);

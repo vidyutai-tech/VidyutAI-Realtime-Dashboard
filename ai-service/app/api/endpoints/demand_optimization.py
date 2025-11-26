@@ -54,8 +54,8 @@ def run_demand_optimization(params, load_profiles_dict, price_profile_24h, solar
         pv_energy_cost = max(0, float(params["pv_energy_cost"]))  # INR/kWh
         battery_om_cost = max(0, float(params["battery_om_cost"]))  # INR/kWh
         weather = str(params["weather"]).lower()
-        objective_type = str(params.get("objective_type", "cost")).lower()
         profile_type = str(params.get("profile_type", "Auto detect"))
+        # Note: Only cost optimization is supported (matching notebook)
         
         # Hydrogen system parameters
         electrolyzer_capacity = max(0, float(params.get("electrolyzer_capacity", 1000.0)))  # kW
@@ -284,33 +284,22 @@ def run_demand_optimization(params, load_profiles_dict, price_profile_24h, solar
         E_h2[0] == E_h2[time_horizon-1] + H_produced[time_horizon-1] * step_size - (P_fc[time_horizon-1] * step_size * fc_conversion_rate)
     ), "h2_cyclic"
 
-    # Objective function
-    if objective_type == "co2":
-        objective_expr = lpSum([
-            step_size * (
-                co2_grid_import * max(0, P_grid[t])
-                + co2_diesel * P_diesel[t]
-                + co2_battery_discharge * P_discharge[t]
-                + co2_pv_used * P_pv_used[t]
-                + co2_fuel_cell * P_fc[t]
-                + co2_electrolyzer * P_elec[t]
-            )
-            + step_size * sum(curtail_penalty[i] * P_curt[(i, t)] for i in dr_loads)
-            for t in T
+    # Objective function: Cost minimization only (matching notebook lines 314-328)
+    cost_components = []
+    for t in T:
+        cost_components.extend([
+            step_size * price_profile[t] * P_grid[t],
+            fuel_price * F_diesel[t],
+            step_size * pv_energy_cost * P_pv_used[t],
+            step_size * battery_om_cost * P_discharge[t],
+            step_size * fuel_cell_om_cost * P_fc[t],
+            step_size * electrolyzer_om_cost * P_elec[t]
         ])
-    else:
-        # Default: minimize total operating cost
-        objective_expr = lpSum([
-            step_size * price_profile[t] * P_grid[t]
-            + step_size * fuel_price * F_diesel[t]
-            + step_size * pv_energy_cost * P_pv_used[t]
-            + step_size * battery_om_cost * P_discharge[t]
-            + step_size * fuel_cell_om_cost * P_fc[t]
-            + step_size * electrolyzer_om_cost * P_elec[t]
-            + step_size * sum(curtail_penalty[i] * P_curt[(i, t)] for i in dr_loads)
-            for t in T
-        ])
-    model += objective_expr
+        # Curtailment penalties
+        for i in dr_loads:
+            cost_components.append(step_size * curtail_penalty[i] * P_curt[(i, t)])
+    
+    model += sum(cost_components)
 
     # Solve
     cbc_path = shutil.which('cbc')
@@ -459,7 +448,7 @@ def run_demand_optimization(params, load_profiles_dict, price_profile_24h, solar
         "Optimization_Period_days": num_days,
         "Resolution_min": time_resolution_minutes,
         "Weather": weather,
-        "Objective": objective_type,
+        "Objective": "cost",  # Single objective: cost minimization only
         "Load": {
             "Total_Demand_kWh": round(total_load_demand, 2),
             "Total_Served_kWh": round(total_load_served, 2),
@@ -631,7 +620,7 @@ async def optimize_demand(
     file: Optional[UploadFile] = None,
     profile_type: str = Form("Auto detect"),
     weather: str = Form("Sunny"),
-    objective_type: str = Form("cost"),
+    # objective_type removed - only cost optimization supported (matching notebook)
     num_days: int = Form(1),
     time_resolution_minutes: int = Form(60),
     grid_connection: float = Form(2500),
@@ -749,7 +738,7 @@ async def optimize_demand(
         "pv_energy_cost": pv_energy_cost,
         "battery_om_cost": battery_om_cost,
         "weather": weather,
-        "objective_type": objective_type,
+        # objective_type removed - only cost optimization supported
         "profile_type": profile_type,
         "electrolyzer_capacity": electrolyzer_capacity,
         "fuel_cell_capacity": fuel_cell_capacity,

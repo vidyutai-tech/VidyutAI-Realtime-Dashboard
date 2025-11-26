@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { AlertTriangle, CheckCircle, Info, ShieldAlert, Bot, Loader } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, ShieldAlert, Bot, Loader, Brain, Filter } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Skeleton from '../components/ui/Skeleton';
+import MLAlertCard from '../components/shared/MLAlertCard';
 import { acknowledgeAlert, runRootCauseAnalysis } from '../services/api';
 import { AppContext } from '../contexts/AppContext';
 
@@ -103,6 +104,7 @@ const AlertItem = ({ alert: initialAlert, onAcknowledge }) => {
 const AlertsPage: React.FC = () => {
   const { alerts, setAlerts, selectedSite } = useContext(AppContext)!;
   const [isLoading, setIsLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'all' | 'ml'>('ml'); // 'all' or 'ml'
 
   useEffect(() => {
     if (!selectedSite) return;
@@ -131,20 +133,130 @@ const AlertsPage: React.FC = () => {
     }
   };
 
+  const mlAlerts = alerts.filter(a => 
+    a.severity === 'critical' || 
+    a.severity === 'high' || 
+    a.message.toLowerCase().includes('anomaly') ||
+    a.message.toLowerCase().includes('vibration') ||
+    a.message.toLowerCase().includes('harmonic') ||
+    a.message.toLowerCase().includes('thermal')
+  );
+
   return (
-    <Card title="Alerts Feed">
-      {isLoading ? (
-        <div className="space-y-4">
-            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Alerts & Anomalies</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            ML-driven predictive alerts with anomaly detection and fault classification
+          </p>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {alerts.map(alert => (
-            <AlertItem key={alert.id} alert={alert} onAcknowledge={handleAcknowledge} />
-          ))}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('ml')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                viewMode === 'ml'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Brain className="w-4 h-4 inline mr-2" />
+              ML-Driven
+            </button>
+            <button
+              onClick={() => setViewMode('all')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                viewMode === 'all'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Filter className="w-4 h-4 inline mr-2" />
+              All Alerts
+            </button>
+          </div>
         </div>
-      )}
-    </Card>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-red-100 text-sm">Critical Alerts</p>
+              <p className="text-3xl font-bold mt-1">
+                {alerts.filter(a => a.severity === 'critical').length}
+              </p>
+            </div>
+            <ShieldAlert className="w-12 h-12 text-red-200" />
+          </div>
+        </Card>
+        <Card className="bg-gradient-to-br from-orange-500 to-orange-600 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-orange-100 text-sm">High Priority</p>
+              <p className="text-3xl font-bold mt-1">
+                {alerts.filter(a => a.severity === 'high').length}
+              </p>
+            </div>
+            <AlertTriangle className="w-12 h-12 text-orange-200" />
+          </div>
+        </Card>
+        <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-blue-100 text-sm">ML-Detected</p>
+              <p className="text-3xl font-bold mt-1">{mlAlerts.length}</p>
+            </div>
+            <Brain className="w-12 h-12 text-blue-200" />
+          </div>
+        </Card>
+        <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-green-100 text-sm">Total Alerts</p>
+              <p className="text-3xl font-bold mt-1">{alerts.length}</p>
+            </div>
+            <Info className="w-12 h-12 text-green-200" />
+          </div>
+        </Card>
+      </div>
+
+      {/* Alerts List */}
+      <Card title={viewMode === 'ml' ? 'ML-Driven Alerts' : 'All Alerts'}>
+        {isLoading ? (
+          <div className="space-y-4">
+            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {(viewMode === 'ml' ? mlAlerts : alerts).map(alert => (
+              viewMode === 'ml' ? (
+                <MLAlertCard key={alert.id} alert={alert} onAcknowledge={handleAcknowledge} />
+              ) : (
+                <AlertItem key={alert.id} alert={alert} onAcknowledge={handleAcknowledge} />
+              )
+            ))}
+            {viewMode === 'ml' && mlAlerts.length === 0 && (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                <Brain className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
+                <p className="font-semibold">No ML-detected anomalies</p>
+                <p className="text-sm mt-1">All systems operating normally</p>
+              </div>
+            )}
+            {alerts.length === 0 && (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                <CheckCircle className="w-16 h-16 mx-auto mb-4 text-green-500" />
+                <p className="font-semibold">No alerts</p>
+                <p className="text-sm mt-1">All systems operating normally</p>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+    </div>
   );
 };
 

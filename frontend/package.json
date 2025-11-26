@@ -14,13 +14,16 @@
     "@google/genai": "^1.21.0",
     "@mui/material": "^7.3.5",
     "axios": "^1.13.2",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^3.0.4",
     "lodash.debounce": "^4.0.8",
     "lucide-react": "^0.544.0",
     "marked": "^16.3.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.3",
-    "recharts": "^3.2.1"
+    "recharts": "^3.2.1",
+    "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
     "@types/marked": "^5.0.2",

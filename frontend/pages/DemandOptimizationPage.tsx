@@ -67,13 +67,13 @@ const DemandOptimizationPage = () => {
   const OPTIMIZE_URL = `${AI_BASE_URL}/api/v1/demand-optimize`;
 
   const controlWrapperClass = "form-control space-y-2";
-  const labelClass = "label-text text-xs font-semibold tracking-wide text-base-content/60";
+  const labelClass = "label-text text-sm font-medium text-base-content/70 mb-1.5";
   const inputClass =
-    "input input-bordered w-full rounded-xl border-base-200 bg-base-200/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 transition-shadow";
+    "w-full px-4 py-3 rounded-lg border border-gray-200 bg-white text-base-content placeholder:text-gray-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200 shadow-sm hover:border-gray-300";
   const selectClass =
-    "select select-bordered w-full rounded-xl border-base-200 bg-base-200/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 transition-shadow";
+    "w-full px-4 py-3 rounded-lg border border-gray-200 bg-white text-base-content focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200 shadow-sm hover:border-gray-300";
   const fileInputClass =
-    "file-input file-input-bordered w-full rounded-xl border-base-200 bg-base-200/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/40 transition-shadow";
+    "file-input w-full rounded-lg border border-gray-200 bg-white text-base-content focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200 shadow-sm hover:border-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20";
   const sectionPanelClass = "space-y-4 rounded-2xl border border-base-200/60 bg-base-100/70 p-5 shadow-sm";
 
   const formatNumber = (
@@ -771,17 +771,11 @@ const DemandOptimizationPage = () => {
                 <label className="label">
                   <span className={labelClass}>Optimization Objective</span>
                 </label>
-                <select
-                  name="objective_type"
-                  value={(formData as any).objective_type}
-                  onChange={handleInputChange}
-                  className={selectClass}
-                >
-                  <option value="cost">Minimize Cost</option>
-                  <option value="co2">Minimize CO2 Emissions</option>
-                </select>
+                <div className="px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 text-gray-700 font-medium">
+                  Minimize Cost
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Cost minimization is the default optimization objective</p>
               </div>
-              
             </div>
           </div>
 
@@ -877,92 +871,6 @@ const DemandOptimizationPage = () => {
                       )}
                     </div>
                   ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Energy Mix Visualization */}
-          {chartData.length > 0 && (
-            <div className="card overflow-hidden rounded-3xl border border-base-200/70 bg-base-100/95 shadow-xl shadow-sky-100/30">
-              <div className="space-y-4 p-6 md:p-8">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[0.6rem] font-semibold uppercase tracking-[0.4em] text-sky-500/80">
-                      Dispatch Detail
-                    </p>
-                    <h3 className="mt-2 text-xl font-semibold text-base-content md:text-2xl">
-                      Energy Mix Over Time
-                    </h3>
-                  </div>
-                  <span className="rounded-full border border-sky-400/30 bg-sky-50 px-4 py-1 text-xs font-semibold text-sky-600">
-                    {chartData.length} intervals
-                  </span>
-                </div>
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="timestamp"
-                        tickFormatter={(value) =>
-                          new Date(value).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        }
-                        minTickGap={30}
-                      />
-                      <YAxis />
-                      <Tooltip
-                        formatter={(value: any, name) => [
-                          `${value} kWh`,
-                          String(name).replace(/_/g, " "),
-                        ]}
-                        labelFormatter={(label) =>
-                          new Date(label).toLocaleString([], {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        }
-                      />
-                      <Legend />
-                      <Area
-                        type="monotone"
-                        dataKey="load_kwh"
-                        name="Load"
-                        stackId="1"
-                        stroke="#2563eb"
-                        fill="#2563eb22"
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="solar_kwh"
-                        name="Solar"
-                        stackId="1"
-                        stroke="#f59e0b"
-                        fill="#f59e0b33"
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="grid_kwh"
-                        name="Grid"
-                        stackId="1"
-                        stroke="#10b981"
-                        fill="#10b98133"
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="battery_discharge_kwh"
-                        name="Battery Discharge"
-                        stackId="1"
-                        stroke="#8b5cf6"
-                        fill="#8b5cf633"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
                 </div>
               </div>
             </div>

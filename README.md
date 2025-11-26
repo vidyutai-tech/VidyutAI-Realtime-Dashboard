@@ -123,22 +123,22 @@ pip install -r requirements.txt
 
 Create a file `backend/.env`:
 ```bash
-PORT=3000
+PORT=5001
 NODE_ENV=development
 FRONTEND_URL=http://localhost:5173
 AI_SERVICE_URL=http://localhost:8000
 JWT_SECRET=your-secret-key-change-this
 ```
 
-**Note:** Port 5000 is used by macOS AirPlay Receiver by default, so we use port 3000 for the backend.
+**Note:** Port 5000 is used by macOS AirPlay Receiver by default, so we use port 5001 for the backend.
 
 **Frontend (.env file):**
 
 Create a file `frontend/.env`:
 ```bash
-VITE_API_URL=http://localhost:3000
-VITE_API_BASE_URL=http://localhost:3000/api/v1
-VITE_WS_URL=ws://localhost:3000
+VITE_API_URL=http://localhost:5001
+VITE_API_BASE_URL=http://localhost:5001/api/v1
+VITE_WS_URL=ws://localhost:5001
 ```
 
 **AI Service (.env file):**
@@ -188,12 +188,12 @@ cd backend
 npm start
 
 # Expected output:
-# 🚀 Backend server running on port 3000
-# 📊 API: http://localhost:3000/api/v1
+# 🚀 Backend server running on port 5001
+# 📊 API: http://localhost:5001/api/v1
 # 🔌 Socket.IO ready for real-time updates
 ```
 
-**Backend will be available at:** http://localhost:3000
+**Backend will be available at:** http://localhost:5001
 
 ### Terminal 2: Start Frontend (React)
 
@@ -246,14 +246,14 @@ Once all services are running:
 | Service | URL | Description |
 |---------|-----|-------------|
 | **Frontend Dashboard** | http://localhost:5173 | Main dashboard interface |
-| **Backend API** | http://localhost:3000 | Node.js REST API |
-| **Backend Health** | http://localhost:3000/health | Health check endpoint |
+| **Backend API** | http://localhost:5001 | Node.js REST API |
+| **Backend Health** | http://localhost:5001/health | Health check endpoint |
 | **AI Service API** | http://localhost:8000 | Python ML API (optional) |
 | **AI Service Docs** | http://localhost:8000/docs | Interactive API documentation |
 
 ## 📊 API Endpoints
 
-### Backend (Node.js) - Port 3000
+### Backend (Node.js) - Port 5001
 
 #### Sites
 ```
@@ -297,7 +297,7 @@ GET    /api/v1/predictions/optimization    # Optimization recommendations
 
 ### Socket.IO Real-time Events
 
-Connect to: `ws://localhost:3000`
+Connect to: `ws://localhost:5001`
 
 **Events:**
 - `connection` - Client connected
@@ -309,7 +309,7 @@ Connect to: `ws://localhost:3000`
 ```javascript
 import io from 'socket.io-client';
 
-const socket = io('http://localhost:3000');
+const socket = io('http://localhost:5001');
 
 socket.on('metrics_update', (data) => {
   console.log('Real-time metrics:', data);
@@ -354,13 +354,13 @@ npm start
 
 ### Port Already in Use
 
-**Backend (Port 3000):**
+**Backend (Port 5001):**
 ```bash
-# Find and kill process on port 3000
-lsof -ti:3000 | xargs kill -9
+# Find and kill process on port 5001
+lsof -ti:5001 | xargs kill -9
 ```
 
-**Note:** If you see port 5000 in use, it's likely macOS AirPlay Receiver. We use port 3000 to avoid this conflict.
+**Note:** If you see port 5000 in use, it's likely macOS AirPlay Receiver. We use port 5001 to avoid this conflict.
 
 **Frontend (Port 5173):**
 ```bash
@@ -496,24 +496,86 @@ VidyutAI Development Team
 
 ---
 
+## 🎬 Demo Setup & Real-time Data
+
+### Populate Demo Data (One-time)
+
+Before your demo, populate the database with realistic data:
+
+```bash
+cd backend
+node scripts/populate-demo-data.js
+```
+
+This generates:
+- 7 days of realistic timeseries data (~16,000+ records)
+- Demo alerts
+- Updated site statistics
+
+### Real-time Data Simulation
+
+The dashboard includes a **real-time data simulator** that:
+
+1. **Generates realistic IoT sensor data** every 5 seconds
+2. **Writes to SQLite database** (`timeseries_data` table)
+3. **Uses time-of-day patterns**:
+   - Solar generation peaks at noon
+   - Load demand peaks in evening
+   - Realistic variance and trends
+
+4. **Broadcasts via Socket.IO** to all connected clients
+
+**How it works:**
+- Simulator (`backend/services/realtime-simulator.js`) writes to SQLite
+- Socket.IO server (`backend/server.js`) reads from SQLite every 5 seconds
+- Frontend receives `metrics_update` events and updates UI in real-time
+
+**Verify real-time updates:**
+```bash
+# Check database writes
+sqlite3 backend/database/vidyutai.db "SELECT COUNT(*) FROM timeseries_data WHERE timestamp >= datetime('now', '-1 minute');"
+```
+
+### Demo Checklist
+
+**Pre-Demo (30 min before):**
+- [ ] Run `node backend/scripts/populate-demo-data.js`
+- [ ] Start all three services (Backend, Frontend, AI Service)
+- [ ] Verify Socket.IO connection in browser console
+- [ ] Check real-time updates are flowing
+
+**During Demo:**
+- [ ] Show real-time metrics updating every 5 seconds
+- [ ] Highlight SQLite database for fast, local storage
+- [ ] Demonstrate time-of-day patterns (solar/load peaks)
+- [ ] Run Source/Demand optimization features
+- [ ] Show enhanced input boxes and smooth UI
+
+**Key Talking Points:**
+- Real-time SQLite-based data simulation
+- Socket.IO WebSocket updates
+- Time-of-day realistic patterns
+- Enhanced UI with smooth input boxes
+- Comprehensive optimization tools
+
 ## 📝 Quick Reference Commands
 
 ### Start Everything
 ```bash
-# Terminal 1 - Backend
+# Terminal 1 - Backend (Port 5001)
 cd backend && npm start
 
-# Terminal 2 - Frontend  
+# Terminal 2 - Frontend (Port 5173)
 cd frontend && npm run dev
 
-# Terminal 3 - AI Service (Optional)
-cd ai-service && source venv/bin/activate && cd app && uvicorn main:app --reload --port 8000
+# Terminal 3 - AI Service (Port 8000)
+cd ai-service && source venv/bin/activate && uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 ### Check Services are Running
 ```bash
 # Backend health check
-curl http://localhost:3000/health
+curl http://localhost:5001/health
 
 # Frontend (open in browser)
 open http://localhost:5173
@@ -524,6 +586,24 @@ open http://localhost:8000/docs
 
 ### Stop Services
 - Press `Ctrl+C` in each terminal window
+
+### Clean Old Data (Optional)
+
+If your database gets too large, clean old timeseries data:
+
+```bash
+# Keep last 48 hours (default)
+cd backend
+node scripts/clean-old-data.js
+
+# Or specify hours to keep (e.g., 24 hours)
+node scripts/clean-old-data.js 24
+```
+
+Or manually:
+```bash
+sqlite3 backend/database/vidyutai.db "DELETE FROM timeseries_data WHERE timestamp < datetime('now', '-7 days');"
+```
 
 ---
 

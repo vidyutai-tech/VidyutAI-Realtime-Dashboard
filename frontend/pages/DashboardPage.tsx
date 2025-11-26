@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Sun, Zap, BatteryCharging, Shield, Check, X, Bot, Server, TrendingUp, Activity, DollarSign } from 'lucide-react';
+import { Sun, Zap, BatteryCharging, Shield, Check, X, Bot, Server, TrendingUp, Activity, DollarSign, Info } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Skeleton from '../components/ui/Skeleton';
 import { acceptRLSuggestion, rejectRLSuggestion, fetchTimeseries } from '../services/api';
@@ -11,6 +11,9 @@ import RLTuningCard from '../components/shared/RLTuningCard';
 import { RLSuggestion } from '../types';
 import RLSuggestionsCard from '@/components/shared/RLSuggestionsCard';
 import WeatherCard from '@/components/shared/WeatherCard';
+import SituationSummaryStrip from '../components/shared/SituationSummaryStrip';
+import ExplainableSuggestion from '../components/shared/ExplainableSuggestion';
+import ControlActionTimeline from '../components/shared/ControlActionTimeline';
 import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const SummaryCard: React.FC<{ title: string; value: string | number; unit: string; icon: React.ReactNode; isLoading: boolean }> = ({ title, value, unit, icon, isLoading }) => (
@@ -65,6 +68,36 @@ const DashboardPage: React.FC = () => {
   const [isAssistantOpen, setAssistantOpen] = useState(false);
   const [timeseriesData, setTimeseriesData] = useState<any[]>([]);
   const [isTimeseriesLoading, setIsTimeseriesLoading] = useState(true);
+  const [showExplainable, setShowExplainable] = useState(false);
+  
+  // Calculate situation summary data
+  const situationData = {
+    gridCondition: (() => {
+      const gridDraw = healthStatus?.grid_draw || 0;
+      if (gridDraw < 50) return 'stable' as const;
+      if (gridDraw < 150) return 'weak' as const;
+      return 'outage_likely' as const;
+    })(),
+    forecastedPeak: {
+      time: '14:00-16:00',
+      value: 420,
+      unit: 'kW',
+    },
+    batteryLifeImpact: (() => {
+      // Calculate based on battery usage
+      const soc = healthStatus?.battery_soc || latestTelemetry?.metrics.soc_batt || 0;
+      const discharge = latestTelemetry?.metrics.battery_discharge || 0;
+      return Math.min(15, (discharge / 100) * 2 + (100 - soc) * 0.1);
+    })(),
+    marketPriceSignal: {
+      current: 8.5,
+      trend: 'up' as const,
+      unit: 'kWh',
+    },
+  };
+
+  // Find the latest suggestion that is still 'pending'
+  const latestSuggestion = suggestions.find(s => s.status === 'pending');
 
   // Fetch timeseries data for charts
   useEffect(() => {
@@ -93,10 +126,33 @@ const DashboardPage: React.FC = () => {
       }
     };
 
+    // Initial load
     loadTimeseries();
-    const interval = setInterval(loadTimeseries, 60000); // Refresh every minute
+    
+    // Refresh every 10 seconds for real-time feel (Socket.IO updates every 5s)
+    const interval = setInterval(loadTimeseries, 10000);
     return () => clearInterval(interval);
   }, [selectedSite]);
+
+  // Update chart when latestTelemetry changes (from Socket.IO)
+  useEffect(() => {
+    if (latestTelemetry && latestTelemetry.metrics) {
+      const newPoint = {
+        time: new Date(latestTelemetry.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        power: latestTelemetry.metrics.pv_generation || 0,
+        load: latestTelemetry.metrics.net_load || 0,
+        battery: latestTelemetry.metrics.battery_discharge || 0,
+        grid: healthStatus?.grid_draw || 0,
+        soc: latestTelemetry.metrics.soc_batt || healthStatus?.battery_soc || 0,
+      };
+      
+      setTimeseriesData((prev) => {
+        const updated = [...prev, newPoint];
+        // Keep last 24 points (2 hours at 5-minute intervals)
+        return updated.slice(-24);
+      });
+    }
+  }, [latestTelemetry, healthStatus]);
 
   // This logic for calculating live flows is great
   const liveFlows = {
@@ -107,9 +163,6 @@ const DashboardPage: React.FC = () => {
     battery_to_grid: 0,
     pv_to_grid: 0,
   };
-
-  // Find the latest suggestion that is still 'pending'
-  const latestSuggestion = suggestions.find(s => s.status === 'pending');
 
   const handleAction = async (suggestion: RLSuggestion, action: 'accept' | 'reject') => {
     if (!selectedSite) return;
@@ -136,6 +189,16 @@ const DashboardPage: React.FC = () => {
  return (
     <>
       <div className="space-y-6">
+        {/* Situation Summary Strip */}
+        {!isLoading && (
+          <SituationSummaryStrip
+            gridCondition={situationData.gridCondition}
+            forecastedPeak={situationData.forecastedPeak}
+            batteryLifeImpact={situationData.batteryLifeImpact}
+            marketPriceSignal={situationData.marketPriceSignal}
+          />
+        )}
+
         {/* Row 1: KPIs */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryCard title="Site Health" value={healthStatus?.site_health?.toFixed(1) ?? 0} unit="%" icon={<Shield className="w-6 h-6 text-green-500" />} isLoading={isLoading} />
@@ -201,7 +264,21 @@ const DashboardPage: React.FC = () => {
           
           {/* Left Column (Spans 2/3 of the width) */}
           <div className="lg:col-span-2 space-y-6">
-            <RLSuggestionsCard />
+            {/* Enhanced RL Suggestions with Explainability */}
+            <div className="relative">
+              <RLSuggestionsCard />
+              {latestSuggestion && (
+                <div className="absolute top-4 right-4">
+                  <button
+                    onClick={() => setShowExplainable(true)}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium transition-colors border border-blue-200 dark:border-blue-800"
+                  >
+                    <Info className="w-4 h-4" />
+                    Why this action?
+                  </button>
+                </div>
+              )}
+            </div>
             
             {/* Cost Analysis */}
             <Card title="Daily Cost Analysis">
@@ -252,7 +329,18 @@ const DashboardPage: React.FC = () => {
           </div>
 
         </div>
+
+        {/* Control Action Timeline */}
+        <ControlActionTimeline />
       </div>
+
+      {/* Explainable Suggestion Modal */}
+      {showExplainable && latestSuggestion && (
+        <ExplainableSuggestion
+          suggestion={latestSuggestion}
+          onClose={() => setShowExplainable(false)}
+        />
+      )}
 
       {/* Floating Action Button and Modal (This part is correct) */}
       <div className="fixed bottom-6 right-6 z-40">
