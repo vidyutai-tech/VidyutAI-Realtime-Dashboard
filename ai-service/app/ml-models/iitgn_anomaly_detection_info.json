@@ -1,0 +1,28 @@
+{
+  "features": [
+    "FWD_ACT_ENRGY",
+    "AVG_APP_PWR",
+    "AVG_RACT_PWR",
+    "VTG_RY",
+    "VTG_YB",
+    "VTG_BR",
+    "VTG_LL",
+    "CURR_R",
+    "CURR_Y",
+    "CURR_B",
+    "AVG_CURR.",
+    "PF_R",
+    "PF_Y",
+    "PF_B",
+    "AVG_PF",
+    "FREQUENCY (Hz)",
+    "APP_PWR_R",
+    "APP_PWR_Y",
+    "APP_PWR_B",
+    "RACT_PWR_R",
+    "RACT_PWR_Y",
+    "RACT_PWR_B"
+  ],
+  "contamination": 0.05,
+  "n_samples": 672
+}

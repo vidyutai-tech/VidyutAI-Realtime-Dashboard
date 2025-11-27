@@ -13,10 +13,13 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001
 // --- Helper for Auth Headers ---
 const getAuthHeaders = (): HeadersInit => {
   const token = localStorage.getItem('jwt');
-  return {
+  const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`,
   };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
 };
 
 // --- Authentication ---
@@ -29,20 +32,18 @@ export interface User {
 
 export const apiLogin = async (email: string, password: string): Promise<{ token: string; user: User }> => {
   console.log(`Logging in with ${email}`);
-  const params = new URLSearchParams();
-  params.append('username', email);
-  params.append('password', password);
-
+  
   const response = await fetch(`${API_BASE_URL}/auth/token`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Type': 'application/json',
     },
-    body: params,
+    body: JSON.stringify({ username: email, password }),
   });
 
   if (!response.ok) {
-    throw new Error('Invalid credentials');
+    const errorData = await response.json().catch(() => ({ error: 'Invalid credentials' }));
+    throw new Error(errorData.message || errorData.error || 'Invalid credentials');
   }
   const data = await response.json();
   
@@ -115,11 +116,8 @@ export const deleteSite = async (siteId: string): Promise<{ success: boolean }> 
 };
 
 export const fetchTimeseries = async (siteId: string, range: string = 'last_6h'): Promise<any[]> => {
-  const response = await fetch(`${API_BASE_URL}/sites/${siteId}/timeseries?range=${range}`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) throw new Error('Failed to fetch timeseries data');
-  return response.json();
+  // Alias for fetchTimeseriesData for consistency
+  return fetchTimeseriesData(siteId, range);
 };
 
 // --- Core Data Fetching ---
@@ -243,6 +241,114 @@ export const runMotorFaultDiagnosis = async (): Promise<{ prediction: string; co
   return response.json();
 };
 
+// --- Energy Forecasting ---
+export interface ForecastInput {
+  site_id?: string | null;
+  forecast_type: 'production' | 'demand' | 'consumption';
+  forecast_horizon_hours: number;
+}
+
+export interface ForecastResponse {
+  success: boolean;
+  forecast_type: string;
+  horizon_hours: number;
+  site_id?: string;
+  data: Array<{
+    timestamp: string;
+    hour: number;
+    value: number;
+    confidence_lower: number;
+    confidence_upper: number;
+    pattern_factor?: number;
+    model_used?: string;
+  }>;
+  summary?: {
+    total_24h: number;
+    average: number;
+    peak: number;
+    peak_hour: number;
+    min: number;
+    min_hour: number;
+  };
+  model_info?: {
+    model: string;
+    description?: string;
+    mae?: number;
+    rmse?: number;
+    r2?: number;
+  };
+}
+
+export const forecastEnergy = async (input: ForecastInput): Promise<ForecastResponse> => {
+  const AI_SERVICE_URL = (import.meta as any).env?.VITE_AI_BASE_URL || "http://localhost:8000";
+  const response = await fetch(`${AI_SERVICE_URL}/api/v1/forecast/energy`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: 'Forecasting failed' }));
+    throw new Error(errorData.message || 'Forecasting failed');
+  }
+  const data = await response.json();
+  
+  // Calculate summary if not provided
+  if (data.success && data.data && !data.summary) {
+    const values = data.data.map((d: any) => d.value);
+    const total = values.reduce((sum: number, val: number) => sum + val, 0);
+    const average = total / values.length;
+    const peak = Math.max(...values);
+    const peakIndex = values.indexOf(peak);
+    const min = Math.min(...values);
+    const minIndex = values.indexOf(min);
+    
+    data.summary = {
+      total_24h: total,
+      average: average,
+      peak: peak,
+      peak_hour: data.data[peakIndex]?.hour || 12,
+      min: min,
+      min_hour: data.data[minIndex]?.hour || 2
+    };
+  }
+  
+  return data;
+};
+
+export const getForecastSummary = async (
+  siteId?: string,
+  forecastType: 'production' | 'demand' | 'consumption' = 'consumption'
+): Promise<ForecastResponse> => {
+  const AI_SERVICE_URL = (import.meta as any).env?.VITE_AI_BASE_URL || "http://localhost:8000";
+  const params = new URLSearchParams({ forecast_type: forecastType });
+  if (siteId) params.append('site_id', siteId);
+  
+  const response = await fetch(`${AI_SERVICE_URL}/api/v1/forecast/summary?${params}`, {
+    method: 'GET',
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to get forecast summary');
+  return response.json();
+};
+
+export const explainForecast = async (forecastData: ForecastResponse): Promise<{ success: boolean; explanation: string; fallback?: boolean }> => {
+  const AI_SERVICE_URL = (import.meta as any).env?.VITE_AI_BASE_URL || "http://localhost:8000";
+  const response = await fetch(`${AI_SERVICE_URL}/api/v1/forecast/explain`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(forecastData)
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: 'Failed to get explanation' }));
+    throw new Error(errorData.message || 'Failed to get explanation');
+  }
+  return response.json();
+};
+
+export const getAIServiceURL = (): string => {
+  return (import.meta as any).env?.VITE_AI_BASE_URL || "http://localhost:8000";
+};
+
 // --- Hackathon Features ---
 export const updateRLStrategy = async (siteId: string, strategy: RLStrategy): Promise<{ success: boolean }> => {
   const response = await fetch(`${API_BASE_URL}/sites/${siteId}/rl-strategy`, {
@@ -304,7 +410,10 @@ export const saveSiteTypeAndWorkflow = async (siteType: string, workflowPreferen
     headers: getAuthHeaders(),
     body: JSON.stringify({ site_type: siteType, workflow_preference: workflowPreference })
   });
-  if (!response.ok) throw new Error('Failed to save site type and workflow');
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error', message: 'Failed to save site type and workflow' }));
+    throw new Error(errorData.message || errorData.error || 'Failed to save site type and workflow');
+  }
   return response.json();
 };
 

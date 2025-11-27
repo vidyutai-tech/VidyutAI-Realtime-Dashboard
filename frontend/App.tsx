@@ -33,6 +33,7 @@ import UnifiedDashboardPage from './pages/UnifiedDashboardPage';
 import AIRecommendationsPage from './pages/AIRecommendationsPage';
 import RenewableOptimizationPage from './pages/RenewableOptimizationPage';
 import AIExplanationsPage from './pages/AIExplanationsPage';
+import EnergyForecastingPage from './pages/EnergyForecastingPage';
 import { AppContext } from './contexts/AppContext';
 import { Telemetry, Alert, RLSuggestion, HealthStatus, Site, RLStrategy } from './types';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -83,9 +84,33 @@ const App: React.FC = () => {
     setHasCompletedWizard(completed === 'true');
   }, []);
 
+  // Sync user state from localStorage on mount and when authentication changes
+  useEffect(() => {
+    const token = localStorage.getItem('jwt');
+    const storedUser = localStorage.getItem('user');
+    
+    if (token && storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        setIsAuthenticated(true);
+        setCurrentUser(user);
+      } catch (e) {
+        console.error('Failed to parse user from localStorage:', e);
+        // Clear invalid data
+        localStorage.removeItem('jwt');
+        localStorage.removeItem('user');
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+      }
+    } else if (!token) {
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+    }
+  }, []);
+
   // Load user profile
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && currentUser) {
       getUserProfile()
         .then(profile => {
           if (profile) {
@@ -94,7 +119,7 @@ const App: React.FC = () => {
         })
         .catch(err => console.error('Failed to load user profile:', err));
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentUser]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -117,20 +142,121 @@ const App: React.FC = () => {
       });
 
       newSocket.on('connect', () => {
-        console.log('✅ Socket.IO connected');
+        console.log('✅ Socket.IO connected with ID:', newSocket.id);
+        // Subscribe to the selected site's updates
+        if (selectedSite) {
+          newSocket.emit('subscribe_site', selectedSite.id);
+          console.log(`📡 Subscribed to site: ${selectedSite.id}`);
+        }
       });
 
-      newSocket.on('disconnect', () => {
-        console.log('❌ Socket.IO disconnected');
+      newSocket.on('disconnect', (reason) => {
+        console.log('❌ Socket.IO disconnected. Reason:', reason);
+      });
+
+      newSocket.on('connect_error', (error) => {
+        console.error('❌ Socket.IO connection error:', error.message);
+        console.error('Socket URL:', socketUrl);
+      });
+
+      // Listen for site data updates (initial connection only, not frequent updates)
+      let lastSiteDataUpdate = 0;
+      newSocket.on('site_data', (data: any) => {
+        const now = Date.now();
+        // Only process initial site_data or if 10 minutes have passed
+        if (lastSiteDataUpdate > 0 && now - lastSiteDataUpdate < 570000) {
+          console.log('⏱️ Skipping site_data update - too soon since last update');
+          return;
+        }
+        
+        lastSiteDataUpdate = now;
+        console.log('📊 Received initial site data:', data);
+        // Convert to Telemetry format if needed
+        if (data.metrics) {
+          const telemetry: Telemetry = {
+            timestamp: data.timestamp || new Date().toISOString(),
+            site_id: data.siteId || selectedSite?.id || '',
+            device_id: 'system',
+            subsystem: 'System',
+            metrics: {
+              voltage: data.metrics.voltage?.value || 0,
+              current: data.metrics.current?.value || 0,
+              frequency: data.metrics.frequency?.value || 0,
+              thd: data.metrics.thd?.value || 0,
+              power_factor: data.metrics.power_factor?.value || 0.95,
+              voltage_unbalance: data.metrics.voltage_unbalance?.value || 0,
+              temp_c: data.metrics.temp_c?.value || 0,
+              pv_generation: data.metrics.pv_generation?.value || 0,
+              net_load: data.metrics.net_load?.value || 0,
+              battery_discharge: data.metrics.battery_discharge?.value || 0,
+              soc_batt: data.metrics.soc?.value || 0,
+            }
+          };
+          setLatestTelemetry(telemetry);
+        }
+      });
+
+      // Listen for metrics updates (broadcast from backend) - throttled to 10-minute intervals
+      let lastMetricsUpdate = 0;
+      newSocket.on('metrics_update', (data: any) => {
+        const now = Date.now();
+        // Only process updates if at least 9.5 minutes have passed since last update
+        if (now - lastMetricsUpdate < 570000) { // 9.5 minutes = 570000ms
+          console.log('⏱️ Skipping metrics update - too soon since last update');
+          return;
+        }
+        
+        lastMetricsUpdate = now;
+        console.log('📊 Received metrics update (10-minute interval):', data);
+        if (data.metrics) {
+          const telemetry: Telemetry = {
+            timestamp: data.timestamp || new Date().toISOString(),
+            site_id: data.siteId || selectedSite?.id || '',
+            device_id: 'system',
+            subsystem: 'System',
+            metrics: {
+              voltage: data.metrics.voltage?.value || 0,
+              current: data.metrics.current?.value || 0,
+              frequency: data.metrics.frequency?.value || 0,
+              thd: data.metrics.thd?.value || 0,
+              power_factor: data.metrics.power_factor?.value || 0.95,
+              voltage_unbalance: data.metrics.voltage_unbalance?.value || 0,
+              temp_c: data.metrics.temp_c?.value || 0,
+              pv_generation: data.metrics.pv_generation?.value || 0,
+              net_load: data.metrics.net_load?.value || 0,
+              battery_discharge: data.metrics.battery_discharge?.value || 0,
+              soc_batt: data.metrics.soc?.value || 0,
+            }
+          };
+          setLatestTelemetry(telemetry);
+        }
       });
 
       newSocket.on('telemetry_update', (data: Telemetry) => {
         setLatestTelemetry(data);
       });
 
-      newSocket.on('alert', (data: Alert) => {
-        setAlerts(prev => [data, ...prev]);
-      });
+            newSocket.on('alert', (data: Alert) => {
+              // Check if this is a power quality alert and avoid duplicates
+              const isDuplicate = alerts.some(a => 
+                a.id === data.id || 
+                (a.message === data.message && a.status === 'active')
+              );
+              
+              if (!isDuplicate) {
+                setAlerts(prev => [data, ...prev]);
+                // Show browser notification for critical/high power quality alerts
+                if (data.severity === 'critical' || data.severity === 'high') {
+                  if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification(`Power Quality Alert: ${data.message}`, {
+                      body: data.message,
+                      icon: '/logo.jpeg',
+                      tag: data.id
+                    });
+                  }
+                }
+              }
+            });
 
       newSocket.on('rl_suggestion', (data: RLSuggestion) => {
         setSuggestions(prev => [data, ...prev]);
@@ -144,21 +270,72 @@ const App: React.FC = () => {
     }
   }, [isAuthenticated, selectedSite]);
 
+  const MIN_HEALTH_FETCH_INTERVAL = 20 * 60 * 1000; // 20 minutes minimum between fetches
+
   useEffect(() => {
     if (isAuthenticated && selectedSite) {
-      const loadHealthStatus = async () => {
+      const STORAGE_KEY = `lastHealthStatusFetch_${selectedSite.id}`;
+      let intervalId: NodeJS.Timeout | null = null;
+      let isMounted = true;
+
+      const loadHealthStatus = async (force = false) => {
+        const now = Date.now();
+        const lastFetchStr = localStorage.getItem(STORAGE_KEY);
+        const lastFetchTime = lastFetchStr ? parseInt(lastFetchStr, 10) : 0;
+        const timeSinceLastFetch = now - lastFetchTime;
+        
+        // Throttle: Only fetch if enough time has passed or if forced (initial load)
+        if (!force && timeSinceLastFetch < MIN_HEALTH_FETCH_INTERVAL) {
+          console.log(`⏱️ Skipping health status fetch - only ${Math.round(timeSinceLastFetch / 1000 / 60)} minutes since last fetch (need 20 minutes)`);
+          return;
+        }
+        
+        // Store the fetch time immediately to prevent concurrent calls
+        localStorage.setItem(STORAGE_KEY, now.toString());
+        
         try {
+          console.log(`📡 Fetching health status for site ${selectedSite.id} at ${new Date().toLocaleTimeString()}`);
           const status = await fetchHealthStatus(selectedSite.id);
-          setHealthStatus(status);
+          
+          if (isMounted) {
+            setHealthStatus(status);
+          }
         } catch (error) {
           console.error('Failed to load health status:', error);
+          // Reset the timestamp on error so it can retry
+          if (!force) {
+            localStorage.setItem(STORAGE_KEY, (now - MIN_HEALTH_FETCH_INTERVAL + 60000).toString()); // Allow retry after 1 minute
+          }
         }
       };
-      loadHealthStatus();
-      const interval = setInterval(loadHealthStatus, 600000); // 10 minutes
-      return () => clearInterval(interval);
+      
+      // Check if we should do initial load
+      const lastFetchStr = localStorage.getItem(STORAGE_KEY);
+      const lastFetchTime = lastFetchStr ? parseInt(lastFetchStr, 10) : 0;
+      const timeSinceLastFetch = Date.now() - lastFetchTime;
+      const shouldLoadInitial = timeSinceLastFetch >= MIN_HEALTH_FETCH_INTERVAL || lastFetchTime === 0;
+
+      if (shouldLoadInitial) {
+        // Initial load
+        loadHealthStatus(true);
+      } else {
+        const minutesRemaining = Math.ceil((MIN_HEALTH_FETCH_INTERVAL - timeSinceLastFetch) / 60000);
+        console.log(`⏱️ Skipping initial health status fetch - ${minutesRemaining} minutes until next fetch`);
+      }
+      
+      // Refresh every 20 minutes (longer interval to reduce API calls)
+      intervalId = setInterval(() => {
+        loadHealthStatus(false);
+      }, 20 * 60 * 1000); // 20 minutes
+      
+      return () => {
+        isMounted = false;
+        if (intervalId) {
+          clearInterval(intervalId);
+        }
+      };
     }
-  }, [isAuthenticated, selectedSite]);
+  }, [isAuthenticated, selectedSite?.id]); // Only depend on selectedSite.id to avoid unnecessary re-runs
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -169,12 +346,18 @@ const App: React.FC = () => {
   }, [isAuthenticated]);
 
   const login = (user: User, token: string) => {
+    console.log('Login called with user:', user, 'token:', token ? 'present' : 'missing');
+    if (!user || !token) {
+      console.error('Login called with invalid parameters:', { user, token });
+      return;
+    }
     setIsAuthenticated(true);
     setCurrentUser(user);
     localStorage.setItem('jwt', token);
     localStorage.setItem('user', JSON.stringify(user));
     setShowLanding(false);
     setShowSignup(false);
+    console.log('User logged in successfully:', user.email);
   };
 
   const logout = () => {
@@ -339,6 +522,7 @@ const App: React.FC = () => {
             <Route path="/demand-optimization" element={<DemandOptimizationPage />} />
             <Route path="/source-optimization" element={<SourceOptimizationPage />} />
             <Route path="/ai-ml-insights" element={<AIMLInsightsPage />} />
+            <Route path="/energy-forecasting" element={<EnergyForecastingPage />} />
             <Route path="/ai-recommendations" element={<AIRecommendationsPage />} />
             <Route path="/renewable-optimization" element={<RenewableOptimizationPage />} />
             <Route path="/ai-explanations" element={<AIExplanationsPage />} />

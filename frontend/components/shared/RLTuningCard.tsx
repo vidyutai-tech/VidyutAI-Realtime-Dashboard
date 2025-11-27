@@ -66,8 +66,8 @@ const RLTuningCard: React.FC = () => {
                        <BatteryCharging className="w-4 h-4 mr-2 text-blue-500"/> Battery Longevity
                     </label>
                     <div className="flex items-center space-x-2">
-                        <input type="range" min="0" max="100" value={rlStrategy.battery_longevity_priority} onChange={(e) => handleChange('battery_longevity_priority', Number(e.target.value))} className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer" />
-                        <span className="text-sm font-bold w-10 text-right">{rlStrategy.battery_longevity_priority}%</span>
+                        <input type="range" min="0" max="100" value={rlStrategy.battery_life_priority} onChange={(e) => handleChange('battery_life_priority', Number(e.target.value))} className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer" />
+                        <span className="text-sm font-bold w-10 text-right">{rlStrategy.battery_life_priority}%</span>
                     </div>
                 </div>
             </div>

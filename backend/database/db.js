@@ -69,9 +69,9 @@ function insertTimeseriesData() {
     ];
 
     const insertMany = db.transaction(() => {
-      // Generate data points for last 24 hours (5-minute intervals = 288 points)
-      for (let i = 288; i >= 0; i--) {
-        const timestamp = new Date(now - i * 5 * 60 * 1000);
+      // Generate data points for last 24 hours (10-minute intervals = 144 points)
+      for (let i = 144; i >= 0; i--) {
+        const timestamp = new Date(now - i * 10 * 60 * 1000);
         
         metrics.forEach(metric => {
           const value = metric.base + (Math.random() * metric.variance * 2 - metric.variance);

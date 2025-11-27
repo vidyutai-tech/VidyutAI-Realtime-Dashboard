@@ -6,6 +6,7 @@ interface EnergyFlowDiagramProps {
   currentFlows: EnergyFlows;
   suggestedFlows?: EnergyFlows | null;
   className?: string;
+  mode?: 'grid' | 'island';
 }
 
 const FlowArrow: React.FC<{ d: string; value: number; suggestedValue?: number; isHidden?: boolean }> = ({ d, value, suggestedValue, isHidden }) => {
@@ -57,7 +58,9 @@ const EnergyFlowNode: React.FC<{ x: number; y: number; icon: React.ReactNode; la
   </g>
 );
 
-const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({ currentFlows, suggestedFlows, className }) => {
+const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({ currentFlows, suggestedFlows, className, mode = 'grid' }) => {
+  const isIslandMode = mode === 'island';
+  
   return (
     <div className={`w-full h-80 ${className}`}>
       <svg width="100%" height="100%" viewBox="0 0 300 200">
@@ -69,20 +72,31 @@ const EnergyFlowDiagram: React.FC<EnergyFlowDiagramProps> = ({ currentFlows, sug
 
         {/* Nodes */}
         <EnergyFlowNode x={50} y={50} icon={<Sun className="w-5 h-5 text-orange-400" />} label="PV" />
-        <EnergyFlowNode x={250} y={50} icon={<Network className="w-5 h-5 text-yellow-500" />} label="Grid" />
+        <EnergyFlowNode 
+          x={250} 
+          y={50} 
+          icon={<Network className={`w-5 h-5 ${isIslandMode ? 'text-gray-400' : 'text-yellow-500'}`} />} 
+          label="Grid" 
+        />
         <EnergyFlowNode x={50} y={150} icon={<Battery className="w-5 h-5 text-green-500" />} label="Battery" />
         <EnergyFlowNode x={250} y={150} icon={<Building2 className="w-5 h-5 text-gray-500" />} label="Load" />
 
-        {/* Arrows */}
-        <FlowArrow d="M 75 50 H 225" value={currentFlows.pv_to_grid} suggestedValue={suggestedFlows?.pv_to_grid} isHidden />
-        <FlowArrow d="M 75 150 H 225" value={currentFlows.battery_to_grid} suggestedValue={suggestedFlows?.battery_to_grid} isHidden />
-        <FlowArrow d="M 250 75 V 125" value={currentFlows.grid_to_load} suggestedValue={suggestedFlows?.grid_to_load} />
+        {/* Arrows - Grid connections are hidden in island mode */}
+        {!isIslandMode && (
+          <>
+            <FlowArrow d="M 75 50 H 225" value={currentFlows.pv_to_grid} suggestedValue={suggestedFlows?.pv_to_grid} isHidden />
+            <FlowArrow d="M 75 150 H 225" value={currentFlows.battery_to_grid} suggestedValue={suggestedFlows?.battery_to_grid} isHidden />
+            <FlowArrow d="M 250 75 V 125" value={currentFlows.grid_to_load} suggestedValue={suggestedFlows?.grid_to_load} />
+          </>
+        )}
         <FlowArrow d="M 50 75 V 125" value={currentFlows.pv_to_battery} suggestedValue={suggestedFlows?.pv_to_battery} />
         <FlowArrow d="M 75 50 L 225 150" value={currentFlows.pv_to_load} suggestedValue={suggestedFlows?.pv_to_load} />
         <FlowArrow d="M 75 150 L 225 150" value={currentFlows.battery_to_load} suggestedValue={suggestedFlows?.battery_to_load} />
         
         {/* Labels */}
-        <FlowLabel x={265} y={95} value={currentFlows.grid_to_load} suggestedValue={suggestedFlows?.grid_to_load} unit="kW"/>
+        {!isIslandMode && (
+          <FlowLabel x={265} y={95} value={currentFlows.grid_to_load} suggestedValue={suggestedFlows?.grid_to_load} unit="kW"/>
+        )}
         <FlowLabel x={35} y={95} value={currentFlows.pv_to_battery} suggestedValue={suggestedFlows?.pv_to_battery} unit="kW"/>
         <FlowLabel x={150} y={90} value={currentFlows.pv_to_load} suggestedValue={suggestedFlows?.pv_to_load} unit="kW"/>
         <FlowLabel x={150} y={165} value={currentFlows.battery_to_load} suggestedValue={suggestedFlows?.battery_to_load} unit="kW"/>

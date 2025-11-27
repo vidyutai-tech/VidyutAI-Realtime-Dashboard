@@ -19,3 +19,6 @@ langchain_openai
 # Source Optimization dependencies
 pulp
 matplotlib
+scikit-learn 
+openpyxl
+joblib

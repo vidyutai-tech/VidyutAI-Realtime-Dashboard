@@ -1,14 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Check, Zap, Battery, Fuel, Grid, Lightbulb, Fan, Monitor, Thermometer, Sparkles, UtensilsCrossed, Save } from 'lucide-react';
-import { Appliance, PrimaryGoal, LoadProfile, PlanningRecommendation } from '../types';
-import { savePlanningStep1, savePlanningStep2, savePlanningStep3, getLoadProfiles } from '../services/api';
+import { ArrowLeft, ArrowRight, Check, Zap, Battery, Fuel, Grid, Lightbulb, Fan, Monitor, Thermometer, Sparkles, UtensilsCrossed, Save, Home, School, Factory, Building2, Power, FileText, History, Plus } from 'lucide-react';
+import { Appliance, PrimaryGoal, LoadProfile, PlanningRecommendation, SiteType } from '../types';
+import { savePlanningStep1, savePlanningStep2, savePlanningStep3, getLoadProfiles, getPlanningRecommendations, saveSiteTypeAndWorkflow } from '../services/api';
 
 const PlanningWizardPage: React.FC = () => {
   const navigate = useNavigate();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [showPreviousPlans, setShowPreviousPlans] = useState(false);
+  const [previousPlans, setPreviousPlans] = useState<PlanningRecommendation[]>([]);
+
+  // Check authentication on mount
+  useEffect(() => {
+    const token = localStorage.getItem('jwt');
+    if (!token) {
+      // Redirect to login if not authenticated
+      navigate('/');
+      return;
+    }
+  }, [navigate]);
+
+  // Step 0 State (Site Type)
+  const [siteType, setSiteType] = useState<SiteType | null>(null);
+  const [planName, setPlanName] = useState<string>('');
 
   // Step 1 State
   const [preferredSources, setPreferredSources] = useState<string[]>([]);
@@ -22,6 +38,29 @@ const PlanningWizardPage: React.FC = () => {
 
   // Step 3 State
   const [recommendation, setRecommendation] = useState<PlanningRecommendation | null>(null);
+
+  // Load previous plans on mount
+  useEffect(() => {
+    loadPreviousPlans();
+  }, []);
+
+  const loadPreviousPlans = async () => {
+    try {
+      const plans = await getPlanningRecommendations();
+      setPreviousPlans(plans);
+    } catch (err) {
+      console.error('Failed to load previous plans:', err);
+    }
+  };
+
+  const siteTypeOptions: { value: SiteType; label: string; icon: React.ReactNode; description: string }[] = [
+    { value: 'home', label: 'Home', icon: <Home className="w-6 h-6" />, description: 'Residential properties' },
+    { value: 'college', label: 'College/Institution', icon: <School className="w-6 h-6" />, description: 'Educational institutions' },
+    { value: 'small_industry', label: 'Small Industry', icon: <Factory className="w-6 h-6" />, description: 'Small scale manufacturing' },
+    { value: 'large_industry', label: 'Large Industry', icon: <Building2 className="w-6 h-6" />, description: 'Large scale manufacturing' },
+    { value: 'power_plant', label: 'Power Plant', icon: <Power className="w-6 h-6" />, description: 'Power generation facilities' },
+    { value: 'other', label: 'Other', icon: <FileText className="w-6 h-6" />, description: 'Other site types' },
+  ];
 
   const sourceOptions = [
     { id: 'solar', label: 'Solar PV', icon: <Zap className="w-6 h-6" /> },
@@ -45,6 +84,48 @@ const PlanningWizardPage: React.FC = () => {
     { value: 'cleaning', label: 'Cleaning', icon: <Sparkles className="w-5 h-5" /> },
     { value: 'kitchen_misc', label: 'Kitchen & Misc', icon: <UtensilsCrossed className="w-5 h-5" /> },
   ];
+
+  const handleSiteTypeNext = async () => {
+    if (!siteType) {
+      setError('Please select a site type');
+      return;
+    }
+    if (!planName.trim()) {
+      setError('Please enter a plan name');
+      return;
+    }
+
+    // Check authentication before proceeding
+    const token = localStorage.getItem('jwt');
+    if (!token) {
+      setError('You must be logged in to create a plan. Redirecting to login...');
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
+      return;
+    }
+
+    setError('');
+    setIsLoading(true);
+
+    try {
+      await saveSiteTypeAndWorkflow(siteType, 'plan_new');
+      setStep(1);
+    } catch (err: any) {
+      console.error('Error saving site type:', err);
+      const errorMessage = err.message || 'Failed to save site type and workflow. Please try again.';
+      setError(errorMessage);
+      
+      // If unauthorized, redirect to login
+      if (errorMessage.toLowerCase().includes('unauthorized') || errorMessage.toLowerCase().includes('authentication')) {
+        setTimeout(() => {
+          navigate('/');
+        }, 3000);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSourceToggle = (sourceId: string) => {
     if (sourceId === 'diesel' && !allowDiesel) {
@@ -153,12 +234,16 @@ const PlanningWizardPage: React.FC = () => {
       });
       setRecommendation(result.recommendation);
 
+      // Reload previous plans to show the new one
+      await loadPreviousPlans();
+
       if (action === 'proceed_to_optimization') {
         // Navigate to optimization setup with planning data
         navigate('/optimization-setup', { state: { planningRecommendation: result.recommendation } });
       } else {
-        // Navigate back to main options page
-        navigate('/main-options');
+        // Show success message and option to view plans or create new
+        setStep(0);
+        setShowPreviousPlans(true);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to generate recommendation');
@@ -173,18 +258,136 @@ const PlanningWizardPage: React.FC = () => {
     }, 0);
   };
 
+  // Show previous plans view
+  if (showPreviousPlans && step === 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="mb-6 flex items-center justify-between">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">My Plans</h1>
+            <button
+              onClick={() => {
+                setShowPreviousPlans(false);
+                setStep(0);
+                setSiteType(null);
+                setPlanName('');
+                setPreferredSources([]);
+                setPrimaryGoal(null);
+                setAllowDiesel(false);
+                setAppliances([]);
+                setLoadProfileName('My Load Profile');
+                setLoadProfileId(null);
+                setRecommendation(null);
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 flex items-center space-x-2"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Create New Plan</span>
+            </button>
+          </div>
+
+          {previousPlans.length === 0 ? (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-12 text-center">
+              <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">No Plans Yet</h2>
+              <p className="text-gray-600 dark:text-gray-400 mb-6">Create your first energy planning plan to get started</p>
+              <button
+                onClick={() => setShowPreviousPlans(false)}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+              >
+                Create Plan
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {previousPlans.map((plan) => (
+                <div key={plan.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 hover:shadow-2xl transition-shadow">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+                        Plan #{previousPlans.length - previousPlans.indexOf(plan)}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {new Date(plan.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                      plan.status === 'saved' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                      plan.status === 'applied' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400' :
+                      'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                    }`}>
+                      {plan.status}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-3 mb-4">
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Primary Goal</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white capitalize">
+                        {plan.primary_goal.replace('_', ' ')}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Total CAPEX</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                        ₹{plan.economic_analysis.total_capex.toLocaleString()}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Monthly Savings</p>
+                      <p className="text-sm font-semibold text-green-600 dark:text-green-400">
+                        ₹{plan.economic_analysis.monthly_savings.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      // View plan details - could navigate to a detail page or show modal
+                      setRecommendation(plan);
+                      setStep(3);
+                      setShowPreviousPlans(false);
+                    }}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+                  >
+                    View Details
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4">
       <div className="max-w-4xl mx-auto">
+        {/* Header with View Plans button */}
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Planning Wizard</h1>
+          <button
+            onClick={() => {
+              setShowPreviousPlans(true);
+              loadPreviousPlans();
+            }}
+            className="px-4 py-2 bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700 flex items-center space-x-2"
+          >
+            <History className="w-5 h-5" />
+            <span>View Previous Plans</span>
+          </button>
+        </div>
+
         {/* Progress Indicator */}
         <div className="mb-8">
           <div className="flex items-center justify-center space-x-4">
-            {[1, 2, 3].map((s) => (
+            {[0, 1, 2, 3].map((s) => (
               <React.Fragment key={s}>
                 <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold ${
                   step >= s ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
                 }`}>
-                  {step > s ? <Check className="w-6 h-6" /> : s}
+                  {step > s ? <Check className="w-6 h-6" /> : s + 1}
                 </div>
                 {s < 3 && (
                   <div className={`w-24 h-1 ${step > s ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'}`} />
@@ -193,6 +396,7 @@ const PlanningWizardPage: React.FC = () => {
             ))}
           </div>
           <div className="flex justify-between mt-2 text-sm text-gray-600 dark:text-gray-400">
+            <span>Site Type</span>
             <span>Energy Sources</span>
             <span>Load Profile</span>
             <span>Recommendation</span>
@@ -203,6 +407,84 @@ const PlanningWizardPage: React.FC = () => {
         {error && (
           <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-300">
             {error}
+          </div>
+        )}
+
+        {/* Step 0: Site Type Selection */}
+        {step === 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+              Select Site Type
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-8">
+              Choose the type of site you want to plan for
+            </p>
+
+            <div className="space-y-6">
+              {/* Plan Name */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Plan Name
+                </label>
+                <input
+                  type="text"
+                  value={planName}
+                  onChange={(e) => setPlanName(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="My Energy Plan"
+                />
+              </div>
+
+              {/* Site Type Options */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">
+                  Site Type
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {siteTypeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setSiteType(option.value)}
+                      className={`p-6 rounded-xl border-2 transition-all text-left ${
+                        siteType === option.value
+                          ? 'border-blue-600 bg-blue-50 dark:bg-blue-900/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-blue-300'
+                      }`}
+                    >
+                      <div className="flex flex-col items-center space-y-3">
+                        <div className={`p-3 rounded-lg ${
+                          siteType === option.value
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
+                        }`}>
+                          {option.icon}
+                        </div>
+                        <div className="text-center">
+                          <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                            {option.label}
+                          </h3>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">
+                            {option.description}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Next Button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSiteTypeNext}
+                  disabled={isLoading || !siteType || !planName.trim()}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2"
+                >
+                  <span>Next</span>
+                  <ArrowRight className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -326,14 +608,14 @@ const PlanningWizardPage: React.FC = () => {
             </p>
 
             <div className="space-y-6">
-              {/* Load Profile Name */}
+              {/* Load Profile Name - Use plan name if available */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                   Load Profile Name
                 </label>
                 <input
                   type="text"
-                  value={loadProfileName}
+                  value={loadProfileName || planName}
                   onChange={(e) => setLoadProfileName(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   placeholder="My Load Profile"
@@ -566,7 +848,9 @@ const PlanningWizardPage: React.FC = () => {
                 {/* Action Buttons */}
                 <div className="flex justify-end space-x-4">
                   <button
-                    onClick={() => navigate('/main-options')}
+                    onClick={() => {
+                      navigate('/main-options');
+                    }}
                     className="px-6 py-3 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600"
                   >
                     Back to Options
@@ -574,7 +858,7 @@ const PlanningWizardPage: React.FC = () => {
                   <button
                     onClick={() => handleStep3Complete('save')}
                     disabled={isLoading}
-                    className="px-6 py-3 bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700 disabled:opacity-50 flex items-center space-x-2"
+                    className="px-6 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 flex items-center space-x-2"
                   >
                     <Save className="w-5 h-5" />
                     <span>Save Plan</span>

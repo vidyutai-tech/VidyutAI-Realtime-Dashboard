@@ -17,12 +17,19 @@ from app.data.mock_data import LAST_SUGGESTION_ACTION
 
 # --- Configure the Llama Model via Groq ---
 try:
-    llm = ChatOpenAI(
-        base_url="https://api.groq.com/openai/v1",
-        api_key="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",
-        model="llama-3.1-8b-instant",  # Or "llama-3.3-70b-versatile" if that's a model you have access to
-    )
-    print("✅ Llama 3 model on Groq configured successfully.")
+    from app.core.config import settings
+    groq_api_key = settings.GROQ_API_KEY or os.getenv("GROQ_API_KEY", "")
+    if groq_api_key:
+        llm = ChatOpenAI(
+            base_url="https://api.groq.com/openai/v1",
+            api_key=groq_api_key,
+            model="llama-3.1-8b-instant",
+            temperature=0.7,
+        )
+        print("✅ Llama 3 model on Groq configured successfully.")
+    else:
+        print("⚠️ GROQ_API_KEY not found in environment")
+        llm = None
 except Exception as e:
     print(f"⚠️ Llama/Groq AI could not be configured: {e}")
     llm = None

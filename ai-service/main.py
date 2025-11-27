@@ -42,6 +42,14 @@ except ImportError:
     DEMAND_OPTIMIZATION_AVAILABLE = False
     logger.warning("Demand optimization router not available - app.api.endpoints.demand_optimization not found")
 
+# Import forecasting router
+try:
+    from app.api.endpoints import forecasting
+    FORECASTING_AVAILABLE = True
+except ImportError:
+    FORECASTING_AVAILABLE = False
+    logger.warning("Forecasting router not available - app.api.endpoints.forecasting not found")
+
 # Initialize FastAPI app
 app = FastAPI(
     title="VidyutAI AI Service",
@@ -70,6 +78,11 @@ if OPTIMIZATION_AVAILABLE:
 if DEMAND_OPTIMIZATION_AVAILABLE:
     app.include_router(demand_optimization.router, prefix="/api/v1", tags=["Demand Optimization"])
     logger.info("Demand optimization router registered at /api/v1/demand-optimize")
+
+# Include forecasting router if available
+if FORECASTING_AVAILABLE:
+    app.include_router(forecasting.router, prefix="/api/v1", tags=["Forecasting"])
+    logger.info("Forecasting router registered at /api/v1/forecast/*")
 
 # Initialize components
 data_processor = None

@@ -24,11 +24,11 @@ const aiMlNavItems = [
   { name: 'AI/ML Insights', path: '/ai-ml-insights', icon: Bot },
   { name: 'AI Predictions', path: '/predictions', icon: Bot },
   { name: 'Smart Recommendations', path: '/ai-recommendations', icon: Lightbulb },
-  { name: 'Renewable Optimization', path: '/renewable-optimization', icon: Zap },
   { name: 'AI Explanations', path: '/ai-explanations', icon: MessageSquare },
 ];
 
 const dashboardNavItems = [
+  { name: 'Unified Dashboard', path: '/unified-dashboard', icon: LayoutDashboard },
   { name: 'Operations Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { name: 'Site Detail', path: '/site-detail', icon: AreaChart },
   { name: 'Impact Analysis', path: '/impact', icon: TrendingUp },
@@ -51,8 +51,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setSidebarOpen }) => {
   // Determine which pipeline section is active
   const isPlanningActive = currentPath.includes('/planning-wizard');
   const isOptimizationActive = currentPath.includes('/optimization') || currentPath.includes('/demand-optimization') || currentPath.includes('/source-optimization');
-  const isAIMLActive = currentPath.includes('/ai-ml') || currentPath.includes('/predictions') || currentPath.includes('/ai-recommendations') || currentPath.includes('/renewable-optimization') || currentPath.includes('/ai-explanations');
-  const isDashboardActive = currentPath.includes('/dashboard') || currentPath.includes('/site-detail') || currentPath.includes('/impact') || currentPath.includes('/digital-twin') || currentPath.includes('/simulator') || currentPath.includes('/alerts') || currentPath.includes('/maintenance');
+  const isAIMLActive = currentPath.includes('/ai-ml') || currentPath.includes('/predictions') || currentPath.includes('/ai-recommendations') || currentPath.includes('/ai-explanations') || currentPath.includes('/energy-forecasting');
+  const isDashboardActive = currentPath.includes('/unified-dashboard') || currentPath.includes('/dashboard') || currentPath.includes('/site-detail') || currentPath.includes('/impact') || currentPath.includes('/digital-twin') || currentPath.includes('/simulator') || currentPath.includes('/alerts') || currentPath.includes('/maintenance');
 
   const NavItem: React.FC<{ item: { name: string; path: string; icon: any } }> = ({ item }) => (
     <NavLink

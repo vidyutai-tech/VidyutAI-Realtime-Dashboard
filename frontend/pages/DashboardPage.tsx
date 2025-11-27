@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Sun, Zap, BatteryCharging, Shield, Check, X, Bot, Server, TrendingUp, Activity, DollarSign, Info } from 'lucide-react';
+import { Sun, Zap, BatteryCharging, Shield, Check, X, Bot, Server, Activity, DollarSign, Info } from 'lucide-react';
+import PowerQualityCard from '../components/shared/PowerQualityCard';
+import PowerQualityTrends from '../components/shared/PowerQualityTrends';
 import Card from '../components/ui/Card';
 import Skeleton from '../components/ui/Skeleton';
-import { acceptRLSuggestion, rejectRLSuggestion, fetchTimeseries } from '../services/api';
+import { acceptRLSuggestion, rejectRLSuggestion } from '../services/api';
 import { AppContext } from '../contexts/AppContext';
 import EnergyFlowDiagram from '../components/shared/EnergyFlowDiagram';
 import { formatCurrency } from '../utils/currency';
@@ -14,7 +16,7 @@ import WeatherCard from '@/components/shared/WeatherCard';
 import SituationSummaryStrip from '../components/shared/SituationSummaryStrip';
 import ExplainableSuggestion from '../components/shared/ExplainableSuggestion';
 import ControlActionTimeline from '../components/shared/ControlActionTimeline';
-import { LineChart, Line, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const SummaryCard: React.FC<{ title: string; value: string | number; unit: string; icon: React.ReactNode; isLoading: boolean }> = ({ title, value, unit, icon, isLoading }) => (
   <Card className="flex flex-col">
@@ -66,8 +68,6 @@ const DashboardPage: React.FC = () => {
   const isLoading = healthStatus === null;
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [isAssistantOpen, setAssistantOpen] = useState(false);
-  const [timeseriesData, setTimeseriesData] = useState<any[]>([]);
-  const [isTimeseriesLoading, setIsTimeseriesLoading] = useState(true);
   const [showExplainable, setShowExplainable] = useState(false);
   
   // Calculate situation summary data
@@ -98,61 +98,6 @@ const DashboardPage: React.FC = () => {
 
   // Find the latest suggestion that is still 'pending'
   const latestSuggestion = suggestions.find(s => s.status === 'pending');
-
-  // Fetch timeseries data for charts
-  useEffect(() => {
-    const loadTimeseries = async () => {
-      if (!selectedSite) return;
-      
-      try {
-        setIsTimeseriesLoading(true);
-        const data = await fetchTimeseries(selectedSite.id, 'last_6h');
-        
-        // Format data for charts
-        const formatted = data.slice(-24).map((point: any) => ({
-          time: new Date(point.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-          power: point.metrics.pv_generation || 0,
-          load: point.metrics.net_load || 0,
-          battery: point.metrics.battery_discharge || 0,
-          grid: point.metrics.grid_draw || 0,
-          soc: point.metrics.soc || 0,
-        }));
-        
-        setTimeseriesData(formatted);
-      } catch (error) {
-        console.error('Failed to load timeseries:', error);
-      } finally {
-        setIsTimeseriesLoading(false);
-      }
-    };
-
-    // Initial load
-    loadTimeseries();
-    
-    // Refresh every 10 minutes for IoT data updates
-    const interval = setInterval(loadTimeseries, 600000);
-    return () => clearInterval(interval);
-  }, [selectedSite]);
-
-  // Update chart when latestTelemetry changes (from Socket.IO)
-  useEffect(() => {
-    if (latestTelemetry && latestTelemetry.metrics) {
-      const newPoint = {
-        time: new Date(latestTelemetry.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        power: latestTelemetry.metrics.pv_generation || 0,
-        load: latestTelemetry.metrics.net_load || 0,
-        battery: latestTelemetry.metrics.battery_discharge || 0,
-        grid: healthStatus?.grid_draw || 0,
-        soc: latestTelemetry.metrics.soc_batt || healthStatus?.battery_soc || 0,
-      };
-      
-      setTimeseriesData((prev) => {
-        const updated = [...prev, newPoint];
-        // Keep last 24 points (2 hours at 5-minute intervals)
-        return updated.slice(-24);
-      });
-    }
-  }, [latestTelemetry, healthStatus]);
 
   // This logic for calculating live flows is great
   const liveFlows = {
@@ -202,65 +147,37 @@ const DashboardPage: React.FC = () => {
         {/* Row 1: KPIs */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           <SummaryCard title="Site Health" value={healthStatus?.site_health?.toFixed(2) ?? 0} unit="%" icon={<Shield className="w-6 h-6 text-green-500" />} isLoading={isLoading} />
-          <SummaryCard title="Grid Draw" value={healthStatus?.grid_draw?.toFixed(2) ?? 0} unit="kW" icon={<Zap className="w-6 h-6 text-yellow-500" />} isLoading={isLoading} />
+          <SummaryCard 
+            title="Power Quality" 
+            value={(() => {
+              // Calculate power quality index from telemetry
+              const voltage = latestTelemetry?.metrics?.voltage ?? 415;
+              const frequency = latestTelemetry?.metrics?.frequency ?? 50.0;
+              const thd = latestTelemetry?.metrics?.thd ?? 3.0;
+              const voltageDeviation = Math.abs(voltage - 415) / 415 * 100;
+              const frequencyDeviation = Math.abs(frequency - 50.0);
+              const powerFactor = latestTelemetry?.metrics?.power_factor ?? 0.95;
+              const voltageUnbalance = latestTelemetry?.metrics?.voltage_unbalance ?? 1.5;
+              const voltageScore = voltageDeviation <= 2 ? 100 : voltageDeviation <= 5 ? 70 : voltageDeviation <= 7 ? 50 : 25;
+              const frequencyScore = frequencyDeviation <= 0.2 ? 100 : frequencyDeviation <= 0.3 ? 70 : frequencyDeviation <= 0.5 ? 50 : 25;
+              const thdScore = thd <= 5 ? 100 : thd <= 8 ? 70 : thd <= 10 ? 50 : 25;
+              const pfScore = powerFactor >= 0.95 ? 100 : powerFactor >= 0.90 ? 85 : powerFactor >= 0.85 ? 70 : powerFactor >= 0.80 ? 50 : 25;
+              const unbalanceScore = voltageUnbalance <= 1 ? 100 : voltageUnbalance <= 2 ? 85 : voltageUnbalance <= 3 ? 70 : voltageUnbalance <= 4 ? 50 : 25;
+              return Math.round((voltageScore + frequencyScore + thdScore + pfScore + unbalanceScore) / 5);
+            })()} 
+            unit="/100" 
+            icon={<Activity className="w-6 h-6 text-purple-500" />} 
+            isLoading={isLoading} 
+          />
           <SummaryCard title="Battery SoC" value={healthStatus?.battery_soc?.toFixed(2) ?? 0} unit="%" icon={<BatteryCharging className="w-6 h-6 text-blue-500" />} isLoading={isLoading} />
           <SummaryCard title="Today's PV Gen" value={healthStatus?.pv_generation_today?.toFixed(2) ?? 0} unit="kWh" icon={<Sun className="w-6 h-6 text-orange-400" />} isLoading={isLoading} />
         </div>
 
-        {/* Row 2: Real-Time Power Flow Chart */}
-        <Card title="Real-Time Power Flow (Last 2 Hours)">
-          {isTimeseriesLoading ? (
-            <Skeleton className="h-80 w-full" />
-          ) : (
-            <ResponsiveContainer width="100%" height={320}>
-              <AreaChart data={timeseriesData}>
-                <defs>
-                  <linearGradient id="colorPower" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.1}/>
-                  </linearGradient>
-                  <linearGradient id="colorLoad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                  </linearGradient>
-                  <linearGradient id="colorBattery" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
-                  </linearGradient>
-                  <linearGradient id="colorGrid" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.1}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-gray-300 dark:stroke-gray-600" />
-                <XAxis 
-                  dataKey="time" 
-                  label={{ value: 'Time', position: 'insideBottom', offset: -5 }}
-                  tick={{ fill: 'currentColor', fontSize: 12 }}
-                  interval="preserveStartEnd"
-                />
-                <YAxis 
-                  label={{ value: 'Power (kW)', angle: -90, position: 'insideLeft' }}
-                  tick={{ fill: 'currentColor' }}
-                  tickFormatter={(value) => Number(value).toFixed(2)}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                    border: '1px solid #ccc',
-                    borderRadius: '8px'
-                  }}
-                  formatter={(value: any) => Number(value).toFixed(2)}
-                />
-                <Legend />
-                <Area type="monotone" dataKey="power" stroke="#f59e0b" fillOpacity={1} fill="url(#colorPower)" name="PV Generation" />
-                <Area type="monotone" dataKey="load" stroke="#3b82f6" fillOpacity={1} fill="url(#colorLoad)" name="Load" />
-                <Area type="monotone" dataKey="battery" stroke="#10b981" fillOpacity={1} fill="url(#colorBattery)" name="Battery" />
-                <Area type="monotone" dataKey="grid" stroke="#8b5cf6" fillOpacity={1} fill="url(#colorGrid)" name="Grid" />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </Card>
+        {/* Row 2: Power Quality Monitoring */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <PowerQualityCard />
+          <PowerQualityTrends />
+        </div>
 
         {/* Row 3: RL Suggestions & Analysis */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

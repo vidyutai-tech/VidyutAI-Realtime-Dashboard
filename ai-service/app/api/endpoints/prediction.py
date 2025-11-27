@@ -1,6 +1,8 @@
 # ems-backend/app/api/endpoints/simulations.py
 
 import asyncio
+import random
+from datetime import datetime
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
@@ -13,6 +15,10 @@ from pathlib import Path
 
 from app.models import pydantic_models as models
 from app.api.deps import get_current_user
+from app.data.mock_data import MOCK_RL_SUGGESTIONS
+
+# Import RLSuggestionInput from models
+RLSuggestionInput = models.RLSuggestionInput
 
 # --- Pydantic Models for ML Input ---
 
@@ -43,6 +49,18 @@ class MotorFaultInput(BaseModel):
         max_length=40
     )
 
+class IITGNEnergyForecastInput(BaseModel):
+    features: dict = Field(
+        ...,
+        description="Dictionary of feature values for energy forecasting (flexible feature names)"
+    )
+
+class IITGNAnomalyDetectionInput(BaseModel):
+    features: dict = Field(
+        ...,
+        description="Dictionary of feature values for anomaly detection (flexible feature names)"
+    )
+
 
 # --- Load ML Models on Startup ---
 
@@ -69,8 +87,39 @@ try:
     
     print("✅ All ML models loaded successfully.")
 except FileNotFoundError as e:
-    print(f"❌ ML Model loading failed: {e}. Prediction endpoints will not work.")
+    print(f"⚠️  Some ML models not found: {e}. Continuing with available models.")
     ml_models = {}
+
+# Load IITGN-trained models (optional, trained from real data)
+try:
+    import json
+    # IITGN Energy Forecast Model
+    iitgn_forecast_model_path = models_dir / "iitgn_energy_forecast_model.joblib"
+    iitgn_forecast_scaler_path = models_dir / "iitgn_energy_forecast_scaler.joblib"
+    iitgn_forecast_info_path = models_dir / "iitgn_energy_forecast_info.json"
+    
+    if iitgn_forecast_model_path.exists() and iitgn_forecast_scaler_path.exists():
+        ml_models["iitgn_forecast_model"] = joblib.load(iitgn_forecast_model_path)
+        ml_models["iitgn_forecast_scaler"] = joblib.load(iitgn_forecast_scaler_path)
+        if iitgn_forecast_info_path.exists():
+            with open(iitgn_forecast_info_path, 'r') as f:
+                ml_models["iitgn_forecast_info"] = json.load(f)
+        print("✅ IITGN Energy Forecast Model loaded successfully.")
+    
+    # IITGN Anomaly Detection Model
+    iitgn_anomaly_model_path = models_dir / "iitgn_anomaly_detection_model.joblib"
+    iitgn_anomaly_scaler_path = models_dir / "iitgn_anomaly_detection_scaler.joblib"
+    iitgn_anomaly_info_path = models_dir / "iitgn_anomaly_detection_info.json"
+    
+    if iitgn_anomaly_model_path.exists() and iitgn_anomaly_scaler_path.exists():
+        ml_models["iitgn_anomaly_model"] = joblib.load(iitgn_anomaly_model_path)
+        ml_models["iitgn_anomaly_scaler"] = joblib.load(iitgn_anomaly_scaler_path)
+        if iitgn_anomaly_info_path.exists():
+            with open(iitgn_anomaly_info_path, 'r') as f:
+                ml_models["iitgn_anomaly_info"] = json.load(f)
+        print("✅ IITGN Anomaly Detection Model loaded successfully.")
+except Exception as e:
+    print(f"⚠️  IITGN models not available: {e}. Run training script to generate them.")
 
 
 # --- API Endpoints ---
@@ -200,3 +249,81 @@ async def get_rl_suggestion(input_data: RLSuggestionInput, current_user: models.
     MOCK_RL_SUGGESTIONS[input_data.site_id].insert(0, new_suggestion)
     
     return new_suggestion
+
+@router.post("/predict/iitgn-energy-forecast", response_model=dict)
+async def predict_iitgn_energy_forecast(
+    input_data: IITGNEnergyForecastInput,
+    current_user: models.User = Depends(get_current_user)
+):
+    """Predict energy consumption/generation using IITGN-trained model"""
+    if "iitgn_forecast_model" not in ml_models:
+        raise HTTPException(
+            status_code=503,
+            detail="IITGN Energy Forecast model is not available. Please train the model first using the training script."
+        )
+    
+    model = ml_models["iitgn_forecast_model"]
+    scaler = ml_models["iitgn_forecast_scaler"]
+    info = ml_models.get("iitgn_forecast_info", {})
+    features_list = info.get("features", list(input_data.features.keys()))
+    
+    # Create DataFrame with features in correct order
+    feature_values = [input_data.features.get(f, 0.0) for f in features_list]
+    input_df = pd.DataFrame([feature_values], columns=features_list)
+    
+    # Fill missing values with 0
+    input_df = input_df.fillna(0)
+    
+    # Scale and predict
+    scaled_features = scaler.transform(input_df)
+    prediction = model.predict(scaled_features)[0]
+    
+    return {
+        "prediction": float(prediction),
+        "target": info.get("target", "energy"),
+        "units": "kWh" if "kwh" in info.get("target", "").lower() else "kW",
+        "model_info": {
+            "mae": info.get("mae"),
+            "rmse": info.get("rmse"),
+            "r2": info.get("r2")
+        }
+    }
+
+@router.post("/predict/iitgn-anomaly", response_model=dict)
+async def detect_iitgn_anomaly(
+    input_data: IITGNAnomalyDetectionInput,
+    current_user: models.User = Depends(get_current_user)
+):
+    """Detect anomalies in energy system data using IITGN-trained model"""
+    if "iitgn_anomaly_model" not in ml_models:
+        raise HTTPException(
+            status_code=503,
+            detail="IITGN Anomaly Detection model is not available. Please train the model first using the training script."
+        )
+    
+    model = ml_models["iitgn_anomaly_model"]
+    scaler = ml_models["iitgn_anomaly_scaler"]
+    info = ml_models.get("iitgn_anomaly_info", {})
+    features_list = info.get("features", list(input_data.features.keys()))
+    
+    # Create DataFrame with features in correct order
+    feature_values = [input_data.features.get(f, 0.0) for f in features_list]
+    input_df = pd.DataFrame([feature_values], columns=features_list)
+    
+    # Fill missing values with 0
+    input_df = input_df.fillna(0)
+    
+    # Scale and predict
+    scaled_features = scaler.transform(input_df)
+    prediction = model.predict(scaled_features)[0]
+    anomaly_score = model.score_samples(scaled_features)[0]
+    
+    # -1 means anomaly, 1 means normal
+    is_anomaly = prediction == -1
+    
+    return {
+        "is_anomaly": bool(is_anomaly),
+        "anomaly_score": float(anomaly_score),
+        "status": "anomaly" if is_anomaly else "normal",
+        "confidence": abs(float(anomaly_score))
+    }

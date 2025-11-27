@@ -4,7 +4,7 @@ import { ArrowLeft, LogIn } from 'lucide-react';
 import { apiLogin, User } from '../services/api';
 
 interface LoginPageProps {
-  onLogin: (token: string, user?: User) => void;
+  onLogin: (user: User, token: string) => void;
   onBack?: () => void;
   onSignupClick?: () => void;
   showSignupSuccess?: boolean;
@@ -22,9 +22,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onBack, onSignupClick, s
     setIsLoading(true);
     try {
       const { token, user } = await apiLogin(email, password);
-      onLogin(token, user);
-    } catch (err) {
-      setError('Failed to login. Please check your credentials.');
+      // Fix: Login function expects (user, token) not (token, user)
+      onLogin(user, token);
+    } catch (err: any) {
+      setError(err.message || 'Failed to login. Please check your credentials.');
     } finally {
       setIsLoading(false);
     }

@@ -6,7 +6,7 @@ const { getDatabase } = require('../database/db');
  * Perfect for demo purposes - mimics real IoT sensor data
  */
 class RealtimeSimulator {
-  constructor(intervalMs = 5000) {
+  constructor(intervalMs = 600000) { // Default to 10 minutes (600000ms)
     this.db = getDatabase();
     this.intervalMs = intervalMs;
     this.intervalId = null;
@@ -85,7 +85,10 @@ class RealtimeSimulator {
           { type: 'soc', value: Math.min(100, Math.max(0, this.generateValue(pattern.soc))), unit: '%' },
           { type: 'voltage', value: this.generateValue(pattern.voltage), unit: 'V' },
           { type: 'current', value: this.generateValue(pattern.current), unit: 'A' },
-          { type: 'frequency', value: this.generateValue(pattern.frequency), unit: 'Hz' }
+          { type: 'frequency', value: this.generateValue(pattern.frequency), unit: 'Hz' },
+          { type: 'thd', value: Math.max(0, Math.min(15, 2.5 + Math.random() * 3)), unit: '%' },
+          { type: 'power_factor', value: Math.max(0.75, Math.min(1.0, 0.92 + Math.random() * 0.06)), unit: '' },
+          { type: 'voltage_unbalance', value: Math.max(0, Math.min(5, 0.5 + Math.random() * 2)), unit: '%' }
         ];
 
         // Insert each metric
@@ -104,6 +107,118 @@ class RealtimeSimulator {
 
     insertMany();
   }
+  
+  /**
+   * Check power quality metrics and generate alerts if issues detected
+   */
+  checkPowerQualityAndAlert(siteId, metricsArray) {
+    // Extract power quality metrics
+    const voltageMetric = metricsArray.find(m => m.type === 'voltage');
+    const frequencyMetric = metricsArray.find(m => m.type === 'frequency');
+    const thdMetric = metricsArray.find(m => m.type === 'thd');
+    const pfMetric = metricsArray.find(m => m.type === 'power_factor');
+    const unbalanceMetric = metricsArray.find(m => m.type === 'voltage_unbalance');
+    
+    if (!voltageMetric || !frequencyMetric || !thdMetric || !pfMetric || !unbalanceMetric) {
+      return; // Not all metrics available
+    }
+    
+    const voltage = voltageMetric.value;
+    const frequency = frequencyMetric.value;
+    const thd = thdMetric.value;
+    const powerFactor = pfMetric.value;
+    const voltageUnbalance = unbalanceMetric.value;
+    
+    // Voltage quality check
+    const voltageDeviation = Math.abs(voltage - 415) / 415 * 100;
+    if (voltageDeviation > 7) {
+      this.createPowerQualityAlert(siteId, 'critical', 'Voltage Out of Range', 
+        `Voltage deviation detected: ${voltage.toFixed(1)}V (${voltageDeviation.toFixed(1)}% deviation from nominal 415V). This may cause equipment damage.`);
+    } else if (voltageDeviation > 5) {
+      this.createPowerQualityAlert(siteId, 'high', 'Voltage Deviation Warning', 
+        `Voltage deviation: ${voltage.toFixed(1)}V (${voltageDeviation.toFixed(1)}% deviation). Monitor closely.`);
+    }
+    
+    // Frequency stability check
+    const frequencyDeviation = Math.abs(frequency - 50.0);
+    if (frequencyDeviation > 0.5) {
+      this.createPowerQualityAlert(siteId, 'critical', 'Frequency Instability', 
+        `Frequency deviation: ${frequency.toFixed(2)}Hz (${frequencyDeviation.toFixed(2)}Hz from nominal 50Hz). Grid stability issue detected.`);
+    } else if (frequencyDeviation > 0.3) {
+      this.createPowerQualityAlert(siteId, 'high', 'Frequency Deviation Warning', 
+        `Frequency deviation: ${frequency.toFixed(2)}Hz. Monitor grid stability.`);
+    }
+    
+    // THD check
+    if (thd > 10) {
+      this.createPowerQualityAlert(siteId, 'critical', 'High Harmonic Distortion', 
+        `THD: ${thd.toFixed(2)}% (exceeds 10%). Equipment damage risk. Immediate action recommended.`);
+    } else if (thd > 8) {
+      this.createPowerQualityAlert(siteId, 'high', 'Elevated Harmonic Distortion', 
+        `THD: ${thd.toFixed(2)}% (above 8%). Monitor and investigate source of harmonics.`);
+    }
+    
+    // Power Factor check
+    if (powerFactor < 0.80) {
+      this.createPowerQualityAlert(siteId, 'high', 'Low Power Factor', 
+        `Power factor: ${powerFactor.toFixed(3)} (below 0.80). Energy efficiency reduced. Consider power factor correction.`);
+    } else if (powerFactor < 0.85) {
+      this.createPowerQualityAlert(siteId, 'medium', 'Power Factor Warning', 
+        `Power factor: ${powerFactor.toFixed(3)}. Below optimal range (>0.95).`);
+    }
+    
+    // Voltage Unbalance check
+    if (voltageUnbalance > 4) {
+      this.createPowerQualityAlert(siteId, 'critical', 'High Voltage Unbalance', 
+        `Voltage unbalance: ${voltageUnbalance.toFixed(2)}% (exceeds 4%). Phase imbalance detected. Motor damage risk.`);
+    } else if (voltageUnbalance > 3) {
+      this.createPowerQualityAlert(siteId, 'high', 'Voltage Unbalance Warning', 
+        `Voltage unbalance: ${voltageUnbalance.toFixed(2)}% (above 3%). Monitor three-phase balance.`);
+    }
+  }
+  
+  /**
+   * Create a power quality alert (with deduplication)
+   */
+  createPowerQualityAlert(siteId, severity, title, message) {
+    try {
+      const db = getDatabase();
+      const AlertModel = require('../database/models/alerts');
+      
+      // Check if similar alert already exists (to avoid duplicates)
+      const existingAlert = db.prepare(`
+        SELECT id FROM alerts 
+        WHERE site_id = ? AND title = ? AND status = 'active'
+        ORDER BY created_at DESC LIMIT 1
+      `).get(siteId, title);
+      
+      if (existingAlert) {
+        // Update existing alert timestamp instead of creating duplicate
+        db.prepare(`
+          UPDATE alerts SET updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).run(existingAlert.id);
+        return;
+      }
+      
+      // Create new alert
+      const alertId = `pq_${siteId}_${Date.now()}`;
+      AlertModel.create({
+        id: alertId,
+        site_id: siteId,
+        asset_id: null,
+        severity: severity,
+        type: 'power_quality',
+        title: title,
+        message: message,
+        status: 'active'
+      });
+      
+      console.log(`⚠️  Power Quality Alert: ${title} (${severity}) for site ${siteId}`);
+    } catch (error) {
+      console.error('Failed to create power quality alert:', error);
+    }
+  }
 
   /**
    * Start the simulator
@@ -114,7 +229,7 @@ class RealtimeSimulator {
       return;
     }
 
-    console.log(`🚀 Starting real-time data simulator (interval: ${this.intervalMs}ms)`);
+    console.log(`🚀 Starting real-time data simulator (interval: ${this.intervalMs}ms / ${this.intervalMs / 60000} minutes)`);
     this.isRunning = true;
     
     // Generate initial data point

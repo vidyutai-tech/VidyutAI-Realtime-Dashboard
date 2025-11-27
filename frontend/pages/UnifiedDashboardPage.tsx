@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, LayoutDashboard, AreaChart, TrendingUp, Share2, SlidersHorizontal, AlertTriangle, Wrench, Building, HardDrive, Settings, ArrowLeft } from 'lucide-react';
 import Card from '../components/ui/Card';
+import { AppContext } from '../contexts/AppContext';
 
 const UnifiedDashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { sites, selectedSite, selectSite } = useContext(AppContext)!;
 
   const sections = [
     {
@@ -124,12 +126,38 @@ const UnifiedDashboardPage: React.FC = () => {
             <ArrowLeft className="w-5 h-5 mr-2" />
             Back to Main Options
           </button>
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-            Unified Dashboard (EDA)
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 text-lg">
-            Exploratory Data Analysis dashboard with real-time monitoring, visualizations, and comprehensive energy metrics
-          </p>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+                Unified Dashboard (EDA)
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 text-lg">
+                Exploratory Data Analysis dashboard with real-time monitoring, visualizations, and comprehensive energy metrics using simulated IoT data (10-minute intervals)
+              </p>
+            </div>
+            {sites && sites.length > 0 && (
+              <div className="mt-4 md:mt-0">
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Select Site
+                </label>
+                <select
+                  value={selectedSite?.id || ''}
+                  onChange={(e) => {
+                    const site = sites.find(s => s.id === e.target.value);
+                    if (site) selectSite(site);
+                  }}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white min-w-[200px]"
+                >
+                  <option value="">Select a site...</option>
+                  {sites.map((site) => (
+                    <option key={site.id} value={site.id}>
+                      {site.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
         </div>
 
         {sections.map((section) => (

@@ -1,4 +1,5 @@
 import { useContext, useState, useEffect, useMemo, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { AppContext } from "../contexts/AppContext";
 import axios from "axios";
 import { Snackbar, Alert } from "@mui/material";
@@ -22,39 +23,27 @@ import {
   Zap,
   Users,
   AlertCircle,
+  ArrowLeft,
 } from "lucide-react";
 
 const DemandOptimizationPage = () => {
   const { currentUser } = useContext(AppContext)!;
-  const [formData, setFormData] = useState({
-    // Basic parameters (matching API endpoint)
-    weather: "Sunny",
-    objective_type: "cost",
-    num_days: 1,
-    time_resolution_minutes: 60,
-    profile_type: "Auto detect",
-    // System configuration (matching API endpoint)
-    grid_connection: 2500,
-    solar_connection: 2000,
-    battery_capacity: 4000000,  // Wh (40000 Ah * 100V = 4000000 Wh)
-    battery_voltage: 100,
-    diesel_capacity: 2200,
-    // Hydrogen system parameters (matching API endpoint)
-    electrolyzer_capacity: 1000.0,
-    fuel_cell_capacity: 1000.0,
-    h2_tank_capacity: 100.0,
-    fuel_cell_efficiency_percent: 0.60,
-    // Cost parameters (matching API endpoint)
-    fuel_price: 90,
-    pv_energy_cost: 2.85,
-    battery_om_cost: 6.085,
-    fuel_cell_om_cost: 1.5,
-    electrolyzer_om_cost: 0.5,
-    // Curtailment penalties (matching API endpoint)
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Get common config from location state (from Optimization Setup)
+  const commonConfig = (location.state as any)?.commonConfig;
+  const uploadedFile = (location.state as any)?.uploadedFile;
+
+  // Demand-specific form data (only curtailment penalties)
+  const [demandSpecificData, setDemandSpecificData] = useState({
     curtail_penalty_load3: 18.0,
     curtail_penalty_load4: 10.0,
     curtail_penalty_load5: 8.0,
   });
+
+  // Merged form data (common + demand-specific) for API call
+  const [mergedFormData, setMergedFormData] = useState<any>(null);
   const [response, setResponse] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +105,44 @@ const DemandOptimizationPage = () => {
     return formatted === "-" ? "-" : `${formatted} kWh`;
   };
 
+  // Merge common config with demand-specific data
+  useEffect(() => {
+    if (commonConfig) {
+      const merged = {
+        ...commonConfig,
+        ...demandSpecificData,
+        objective_type: "cost", // Demand optimization only supports cost
+        uploadedFile: uploadedFile || null,
+      };
+      setMergedFormData(merged);
+    } else {
+      // If no common config, use defaults (for backward compatibility)
+      const defaultMerged = {
+        weather: "Sunny",
+        objective_type: "cost",
+        num_days: 1,
+        time_resolution_minutes: 60,
+        profile_type: "Auto detect",
+        grid_connection: 2500,
+        solar_connection: 2000,
+        battery_capacity: 4000000,
+        battery_voltage: 100,
+        diesel_capacity: 2200,
+        electrolyzer_capacity: 1000.0,
+        fuel_cell_capacity: 1000.0,
+        h2_tank_capacity: 100.0,
+        fuel_cell_efficiency_percent: 0.60,
+        fuel_price: 90,
+        pv_energy_cost: 2.85,
+        battery_om_cost: 6.085,
+        fuel_cell_om_cost: 1.5,
+        electrolyzer_om_cost: 0.5,
+        ...demandSpecificData,
+      };
+      setMergedFormData(defaultMerged);
+    }
+  }, [commonConfig, demandSpecificData, uploadedFile]);
+
   useEffect(() => {
     const savedResponse = localStorage.getItem("demandOptimizationResponse");
     if (!savedResponse) return;
@@ -132,7 +159,7 @@ const DemandOptimizationPage = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    setFormData(prev => ({
+    setDemandSpecificData(prev => ({
       ...prev,
       [name]: type === 'number' ? parseFloat(value) || 0 : value
     }));
@@ -140,23 +167,29 @@ const DemandOptimizationPage = () => {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setFormData(prev => ({
+    if (file && mergedFormData) {
+      setMergedFormData(prev => ({
         ...prev,
-        uploadedFile: file as any
+        uploadedFile: file
       }));
     }
   };
 
   const handleSubmit = async () => {
+    if (!mergedFormData) {
+      setError("Please configure optimization parameters first in Optimization Setup");
+      setOpen(true);
+      return;
+    }
+
     // Basic client-side validation
     const validResolutions = [15, 30, 60];
-    if (!validResolutions.includes(Number(formData.time_resolution_minutes))) {
+    if (!validResolutions.includes(Number(mergedFormData.time_resolution_minutes))) {
       setError("Time resolution must be 15, 30, or 60 minutes");
       setOpen(true);
       return;
     }
-    if (formData.num_days < 1 || formData.num_days > 30) {
+    if (mergedFormData.num_days < 1 || mergedFormData.num_days > 30) {
       setError("Number of days must be between 1 and 30");
       setOpen(true);
       return;
@@ -184,14 +217,14 @@ const DemandOptimizationPage = () => {
       const formDataToSend = new FormData();
       
       // Add file if uploaded
-      if ((formData as any).uploadedFile) {
-        formDataToSend.append('file', (formData as any).uploadedFile);
+      if (mergedFormData.uploadedFile) {
+        formDataToSend.append('file', mergedFormData.uploadedFile);
       }
       
-      // Add all form parameters
-      Object.keys(formData).forEach((key) => {
+      // Add all form parameters (merged common + demand-specific)
+      Object.keys(mergedFormData).forEach((key) => {
         if (key !== "uploadedFile") {
-          formDataToSend.append(key, String((formData as any)[key]));
+          formDataToSend.append(key, String(mergedFormData[key]));
         }
       });
 
@@ -254,10 +287,10 @@ const DemandOptimizationPage = () => {
   }, []);
 
   const summary = response?.summary;
-  const displayWeather = summary?.Weather ?? formData.weather;
-  const displayProfile = summary?.Notes?.Profile_Type ?? formData.profile_type;
-  const displayResolution = summary?.Resolution_min ?? formData.time_resolution_minutes;
-  const displayDays = summary?.Optimization_Period_days ?? formData.num_days;
+  const displayWeather = summary?.Weather ?? mergedFormData?.weather ?? "Sunny";
+  const displayProfile = summary?.Notes?.Profile_Type ?? mergedFormData?.profile_type ?? "Auto detect";
+  const displayResolution = summary?.Resolution_min ?? mergedFormData?.time_resolution_minutes ?? 60;
+  const displayDays = summary?.Optimization_Period_days ?? mergedFormData?.num_days ?? 1;
 
   const formattedBreakdown = useMemo(() => {
     if (!response?.summary?.Costs?.Breakdown) return [];
@@ -379,316 +412,52 @@ const DemandOptimizationPage = () => {
         <div className="space-y-8 p-7 md:p-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
+              <button
+                onClick={() => navigate('/optimization-setup')}
+                className="flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-4"
+              >
+                <ArrowLeft className="w-5 h-5 mr-2" />
+                Back to Setup
+              </button>
               <p className="text-[0.65rem] font-semibold uppercase tracking-[0.45em] text-primary/70">
-                Configure Scenario
+                Demand Optimization
               </p>
               <h2 className="mt-2 text-2xl font-semibold text-base-content md:text-3xl">
-                Demand Optimization Configuration
+                Configure Demand Optimization
               </h2>
               <p className="mt-3 max-w-2xl text-sm text-base-content/70 md:text-[0.95rem]">
-                Optimize energy dispatch with multi-load prioritization. Configure 5 load profiles (2 critical, 3 curtailable)
-                with per-load curtailment penalties. Upload CSV with Load1-Load5 columns or use default profiles.
+                Configure curtailment penalties for multi-load prioritization. Common parameters are already set from Optimization Setup.
               </p>
             </div>
-            <div className="grid gap-2 text-right md:text-left">
-              <span className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
-                Last Prepared Scenario
-              </span>
-              <span className="text-base font-semibold text-base-content capitalize">
-                {displayDays} day{displayDays > 1 ? "s" : ""} • {displayResolution}-minute resolution
-              </span>
-              <span className="text-sm text-base-content/60">
-                Weather: <span className="capitalize">{displayWeather}</span> · Profile: <span className="capitalize">{displayProfile}</span>
-              </span>
-            </div>
+            {mergedFormData && (
+              <div className="grid gap-2 text-right md:text-left">
+                <span className="text-xs font-semibold uppercase tracking-wide text-base-content/50">
+                  Configuration from Setup
+                </span>
+                <span className="text-base font-semibold text-base-content capitalize">
+                  {mergedFormData.num_days} day{mergedFormData.num_days > 1 ? "s" : ""} • {mergedFormData.time_resolution_minutes}-minute resolution
+                </span>
+                <span className="text-sm text-base-content/60">
+                  Weather: <span className="capitalize">{mergedFormData.weather}</span> · Profile: <span className="capitalize">{mergedFormData.profile_type}</span>
+                </span>
+              </div>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* Basic Parameters */}
-            <div className={sectionPanelClass}>
-              <h3 className="text-lg font-semibold">Basic parameters</h3>
-              
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Weather Condition</span>
-                </label>
-                <select
-                  name="weather"
-                  value={formData.weather}
-                  onChange={handleInputChange}
-                  className={selectClass}
-                >
-                  <option value="Sunny">Sunny</option>
-                  <option value="Cloudy">Cloudy</option>
-                  <option value="Rainy">Rainy</option>
-                </select>
-              </div>
-
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Number of Days</span>
-                </label>
-                <input
-                  type="number"
-                  name="num_days"
-                  value={formData.num_days}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  min="1"
-                  max="30"
-                />
-              </div>
-
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Time Resolution (minutes)</span>
-                </label>
-                <select
-                  name="time_resolution_minutes"
-                  value={formData.time_resolution_minutes}
-                  onChange={handleInputChange}
-                  className={selectClass}
-                >
-                  <option value="15">15 minutes</option>
-                  <option value="30">30 minutes</option>
-                  <option value="60">60 minutes</option>
-                </select>
-              </div>
-
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Profile Type</span>
-                </label>
-                <select
-                  name="profile_type"
-                  value={formData.profile_type}
-                  onChange={handleInputChange}
-                  className={selectClass}
-                >
-                  <option value="Auto detect">Auto detect</option>
-                  <option value="Residential">Residential</option>
-                  <option value="Commercial">Commercial</option>
-                  <option value="Industrial">Industrial</option>
-                </select>
-              </div>
+          {!commonConfig && (
+            <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <p className="text-yellow-800 dark:text-yellow-300">
+                ⚠️ No configuration found. Please start from <button onClick={() => navigate('/optimization-setup')} className="underline font-semibold">Optimization Setup</button> first.
+              </p>
             </div>
+          )}
 
-            {/* System Configuration */}
-            <div className={sectionPanelClass}>
-              <h3 className="text-lg font-semibold">System configuration</h3>
-              <div className="flex flex-col gap-4">
-                <div className={controlWrapperClass}>
-                  <label className="label">
-                    <span className={labelClass}>Grid Connection (kW)</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="grid_connection"
-                    value={formData.grid_connection}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    step="100"
-                  />
-                </div>
-
-                <div className={controlWrapperClass}>
-                  <label className="label">
-                    <span className={labelClass}>Solar Connection (kW)</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="solar_connection"
-                    value={formData.solar_connection}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    step="100"
-                  />
-                </div>
-
-                <div className={controlWrapperClass}>
-                  <label className="label">
-                    <span className={labelClass}>Battery Capacity (Wh)</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="battery_capacity"
-                    value={formData.battery_capacity}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    step="1000"
-                  />
-                </div>
-
-                <div className={controlWrapperClass}>
-                  <label className="label">
-                    <span className={labelClass}>Battery Voltage (V)</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="battery_voltage"
-                    value={formData.battery_voltage}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    step="10"
-                  />
-                </div>
-
-                <div className={controlWrapperClass}>
-                  <label className="label">
-                    <span className={labelClass}>Diesel Capacity (kW)</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="diesel_capacity"
-                    value={formData.diesel_capacity}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    step="100"
-                  />
-                </div>
-
-                <div className={controlWrapperClass}>
-                  <label className="label">
-                    <span className={labelClass}>Electrolyzer Capacity (kW)</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="electrolyzer_capacity"
-                    value={formData.electrolyzer_capacity}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    step="10"
-                  />
-                </div>
-
-                <div className={controlWrapperClass}>
-                  <label className="label">
-                    <span className={labelClass}>Fuel Cell Capacity (kW)</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="fuel_cell_capacity"
-                    value={formData.fuel_cell_capacity}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    step="10"
-                  />
-                </div>
-
-                <div className={controlWrapperClass}>
-                  <label className="label">
-                    <span className={labelClass}>H2 Tank Capacity (kg)</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="h2_tank_capacity"
-                    value={formData.h2_tank_capacity}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    step="1"
-                  />
-                </div>
-
-                <div className={controlWrapperClass}>
-                  <label className="label">
-                    <span className={labelClass}>Fuel Cell Efficiency (0-1)</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="fuel_cell_efficiency_percent"
-                    value={formData.fuel_cell_efficiency_percent}
-                    onChange={handleInputChange}
-                    className={inputClass}
-                    step="0.01"
-                    min="0"
-                    max="1"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Cost parameters */}
-          <div className={sectionPanelClass}>
-            <h3 className="text-lg font-semibold mb-4">Cost parameters</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Fuel Price (Rs/L)</span>
-                </label>
-                <input
-                  type="number"
-                  name="fuel_price"
-                  value={formData.fuel_price}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  step="0.1"
-                />
-              </div>
-
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>PV Energy Cost (Rs/kWh)</span>
-                </label>
-                <input
-                  type="number"
-                  name="pv_energy_cost"
-                  value={formData.pv_energy_cost}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  step="0.01"
-                />
-              </div>
-
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Battery O&M Cost (Rs/kWh)</span>
-                </label>
-                <input
-                  type="number"
-                  name="battery_om_cost"
-                  value={formData.battery_om_cost}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  step="0.001"
-                />
-              </div>
-
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Fuel Cell O&M Cost (Rs/kWh)</span>
-                </label>
-                <input
-                  type="number"
-                  name="fuel_cell_om_cost"
-                  value={formData.fuel_cell_om_cost}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  step="0.1"
-                />
-              </div>
-
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Electrolyzer O&M Cost (Rs/kWh)</span>
-                </label>
-                <input
-                  type="number"
-                  name="electrolyzer_om_cost"
-                  value={formData.electrolyzer_om_cost}
-                  onChange={handleInputChange}
-                  className={inputClass}
-                  step="0.1"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Curtailment Penalties */}
+          {/* Demand-Specific: Curtailment Penalties */}
           <div className={sectionPanelClass}>
             <h3 className="text-lg font-semibold mb-4">Curtailment Penalties (Rs/kWh)</h3>
             <p className="text-sm text-base-content/70 mb-4">
               Set penalties for curtailing each non-critical load. Higher penalties prioritize serving that load.
+              Loads 1-2 are critical (always served), while Loads 3-5 can be curtailed.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className={controlWrapperClass}>
@@ -698,7 +467,7 @@ const DemandOptimizationPage = () => {
                 <input
                   type="number"
                   name="curtail_penalty_load3"
-                  value={formData.curtail_penalty_load3}
+                  value={demandSpecificData.curtail_penalty_load3}
                   onChange={handleInputChange}
                   className={inputClass}
                   step="0.1"
@@ -715,7 +484,7 @@ const DemandOptimizationPage = () => {
                 <input
                   type="number"
                   name="curtail_penalty_load4"
-                  value={formData.curtail_penalty_load4}
+                  value={demandSpecificData.curtail_penalty_load4}
                   onChange={handleInputChange}
                   className={inputClass}
                   step="0.1"
@@ -732,7 +501,7 @@ const DemandOptimizationPage = () => {
                 <input
                   type="number"
                   name="curtail_penalty_load5"
-                  value={formData.curtail_penalty_load5}
+                  value={demandSpecificData.curtail_penalty_load5}
                   onChange={handleInputChange}
                   className={inputClass}
                   step="0.1"
@@ -744,46 +513,58 @@ const DemandOptimizationPage = () => {
             </div>
           </div>
 
-          {/* File Upload */}
-          <div className={sectionPanelClass}>
-            <h3 className="text-lg font-semibold mb-4">Upload Custom Data (Optional)</h3>
-            <div className={controlWrapperClass}>
-              <label className="label">
-                <span className={labelClass}>Upload CSV file with 5 Load profiles and Price data</span>
-              </label>
-              <input
-                type="file"
-                accept=".csv,.xlsx"
-                onChange={handleFileUpload}
-                className={fileInputClass}
-              />
-              <label className="label">
-                <span className="label-text-alt">CSV/XLSX should have columns: Load1, Load2, Load3, Load4, Load5, Price, and optional Solar/PV</span>
-              </label>
-            </div>
-          </div>
-
-          {/* Objective Selection */}
-          <div className={sectionPanelClass}>
-            <h3 className="text-lg font-semibold mb-4">Objective</h3>
-            <div className="flex flex-col gap-4">
-              <div className={controlWrapperClass}>
-                <label className="label">
-                  <span className={labelClass}>Optimization Objective</span>
-                </label>
-                <div className="px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 text-gray-700 font-medium">
-                  Minimize Cost
+          {/* Display Common Configuration (Read-only) */}
+          {mergedFormData && (
+            <div className={sectionPanelClass}>
+              <h3 className="text-lg font-semibold mb-4">Common Configuration (from Optimization Setup)</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-base-content/60">Weather:</span>
+                  <span className="ml-2 font-semibold capitalize">{mergedFormData.weather}</span>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Cost minimization is the default optimization objective</p>
+                <div>
+                  <span className="text-base-content/60">Days:</span>
+                  <span className="ml-2 font-semibold">{mergedFormData.num_days}</span>
+                </div>
+                <div>
+                  <span className="text-base-content/60">Resolution:</span>
+                  <span className="ml-2 font-semibold">{mergedFormData.time_resolution_minutes} min</span>
+                </div>
+                <div>
+                  <span className="text-base-content/60">Profile:</span>
+                  <span className="ml-2 font-semibold capitalize">{mergedFormData.profile_type}</span>
+                </div>
+                <div>
+                  <span className="text-base-content/60">Grid:</span>
+                  <span className="ml-2 font-semibold">{mergedFormData.grid_connection} kW</span>
+                </div>
+                <div>
+                  <span className="text-base-content/60">Solar:</span>
+                  <span className="ml-2 font-semibold">{mergedFormData.solar_connection} kW</span>
+                </div>
+                <div>
+                  <span className="text-base-content/60">Battery:</span>
+                  <span className="ml-2 font-semibold">{(mergedFormData.battery_capacity / 1000).toFixed(0)} kWh</span>
+                </div>
+                <div>
+                  <span className="text-base-content/60">Diesel:</span>
+                  <span className="ml-2 font-semibold">{mergedFormData.diesel_capacity} kW</span>
+                </div>
               </div>
+              <button
+                onClick={() => navigate('/optimization-setup', { state: { commonConfig: mergedFormData } })}
+                className="mt-4 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Edit common parameters →
+              </button>
             </div>
-          </div>
+          )}
 
           <div className="flex justify-center pt-4">
             <button
               onClick={handleSubmit}
               className="btn h-12 min-h-12 rounded-2xl border-none bg-gradient-to-r from-sky-600 via-indigo-600 to-purple-600 px-10 text-base font-semibold text-white shadow-lg shadow-indigo-300/40 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
-              disabled={loading}
+              disabled={loading || !mergedFormData}
             >
               {loading ? "Optimizing..." : "Run Demand Optimization"}
             </button>

@@ -206,29 +206,89 @@ router.get('/:id/assets', (req, res) => {
 
 // GET timeseries data for a site
 router.get('/:id/timeseries', (req, res) => {
-  const site = mockSites.find(s => s.id === req.params.id);
+  const siteId = req.params.id;
+  // Check both mockSites and database sites
+  const site = mockSites.find(s => s.id === siteId);
   
-  if (!site) {
-    return res.status(404).json({
-      success: false,
-      error: 'Site not found'
-    });
+  // Also check database for site (if using database)
+  const { getDatabase } = require('../database/db');
+  const db = getDatabase();
+  const dbSite = db.prepare('SELECT id FROM sites WHERE id = ?').get(siteId);
+  
+  if (!site && !dbSite) {
+    console.warn(`Site not found in mock data or database: ${siteId}`);
+    // Still return data even if site not found (for demo purposes)
+    // return res.status(404).json({
+    //   success: false,
+    //   error: 'Site not found'
+    // });
   }
   
   const { range = 'last_6h' } = req.query;
-  const points = range === 'last_6h' ? 72 : range === 'last_24h' ? 288 : 72;
+  // Calculate points for 10-minute intervals
+  // last_6h = 36 points, last_24h = 144 points
+  const points = range === 'last_6h' ? 36 : range === 'last_24h' ? 144 : 36;
   const timeseries = [];
   
+  // Try to get data from database first
+  try {
+    const dbData = db.prepare(`
+      SELECT timestamp, metric_type, metric_value
+      FROM timeseries_data
+      WHERE site_id = ? AND timestamp >= datetime('now', '-6 hours')
+      ORDER BY timestamp ASC
+    `).all(siteId);
+    
+    if (dbData && dbData.length > 0) {
+      // Group by timestamp and build metrics object
+      const groupedByTime = {};
+      dbData.forEach(row => {
+        const timeKey = new Date(row.timestamp).toISOString();
+        if (!groupedByTime[timeKey]) {
+          groupedByTime[timeKey] = { timestamp: timeKey, metrics: {} };
+        }
+        groupedByTime[timeKey].metrics[row.metric_type] = row.metric_value;
+      });
+      
+      const dbTimeseries = Object.values(groupedByTime).slice(-points);
+      if (dbTimeseries.length > 0) {
+        // Fill in missing metrics with defaults
+        const completeTimeseries = dbTimeseries.map(point => ({
+          timestamp: point.timestamp,
+          metrics: {
+            voltage: point.metrics.voltage || 410,
+            current: point.metrics.current || 120,
+            frequency: point.metrics.frequency || 50,
+            pv_generation: point.metrics.pv_generation || 0,
+            net_load: point.metrics.net_load || 0,
+            battery_discharge: point.metrics.battery_discharge || 0,
+            grid_draw: point.metrics.grid_draw || 0,
+            soc: point.metrics.soc || 60,
+          }
+        }));
+        console.log(`✅ Returning ${completeTimeseries.length} data points from database for site ${siteId}`);
+        return res.json(completeTimeseries);
+      }
+    }
+  } catch (dbError) {
+    console.warn('Database query failed, using generated data:', dbError.message);
+  }
+  
+  // Fallback: Generate synthetic data
+  const now = new Date();
   for (let i = points; i >= 0; i--) {
-    const timestamp = new Date(Date.now() - i * 5 * 60 * 1000); // 5-minute intervals
+    const timestamp = new Date(now.getTime() - i * 10 * 60 * 1000); // 10-minute intervals
+    const hour = timestamp.getHours();
+    const solarMultiplier = Math.max(0, Math.sin((hour - 6) * Math.PI / 12)) * (hour >= 6 && hour <= 18 ? 1 : 0);
+    
     timeseries.push({
       timestamp: timestamp.toISOString(),
       metrics: {
         voltage: 410 + Math.random() * 20 + Math.sin(i / 10) * 5,
         current: 120 + Math.random() * 30 + Math.sin(i / 8) * 10,
         frequency: 49.8 + Math.random() * 0.4,
-        pv_generation: 500 + Math.random() * 300 + Math.sin(i / 12) * 200,
-        net_load: 400 + Math.random() * 200,
+        pv_generation: (500 + Math.random() * 300) * solarMultiplier,
+        net_load: 400 + Math.random() * 200 + Math.sin(hour / 24 * Math.PI * 2) * 100,
         battery_discharge: Math.random() * 100,
         grid_draw: 100 + Math.random() * 150,
         soc: 60 + Math.random() * 20
@@ -236,6 +296,7 @@ router.get('/:id/timeseries', (req, res) => {
     });
   }
   
+  console.log(`✅ Returning ${timeseries.length} generated data points for site ${siteId}`);
   res.json(timeseries);
 });
 
@@ -250,19 +311,21 @@ router.get('/:id/suggestions', (req, res) => {
     });
   }
   
-  // Return mock RL suggestions
+  // Return mock RL suggestions with proper structure
   const suggestions = [
     {
-      id: '1',
-      type: 'cost_optimization',
-      title: 'Reduce Grid Draw During Peak Hours',
-      description: 'Increase battery discharge between 6 PM - 9 PM to save ₹2,500/day',
+      id: `rl_suggestion_${Date.now()}`,
       status: 'pending',
-      priority: 'high',
-      estimatedSavings: 2500,
-      estimated_cost_savings: 2500,
-      action_summary: 'Reduce grid draw by 50 kW and increase battery discharge during peak hours',
       timestamp: new Date().toISOString(),
+      action_summary: 'Reduce grid draw by 50 kW and increase battery discharge during peak hours (6 PM - 9 PM)',
+      explanation: [
+        'Current grid draw during peak hours is high (150 kW)',
+        'Battery SoC is sufficient (75%) to support increased discharge',
+        'Peak tariff rate (₹12/kWh) vs off-peak (₹8/kWh) makes this profitable',
+        'Expected savings: ₹2,500/day with minimal battery degradation'
+      ],
+      confidence: 0.87,
+      estimated_cost_savings: 2500,
       current_flows: {
         grid_to_load: 150,
         pv_to_load: 300,

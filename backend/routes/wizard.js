@@ -10,13 +10,46 @@ const OptimizationConfigModel = require('../database/models/optimizationConfigs'
 const getUserId = (req) => {
   // This is a simplified version - in production, decode JWT properly
   const authHeader = req.headers.authorization;
-  if (!authHeader) return null;
+  if (!authHeader) {
+    console.log('[getUserId] No authorization header found');
+    return null;
+  }
   
   try {
-    const token = authHeader.replace('Bearer ', '');
-    const decoded = JSON.parse(Buffer.from(token, 'base64').toString());
+    let token = authHeader.replace('Bearer ', '').trim();
+    if (!token) {
+      console.log('[getUserId] Token is empty after removing Bearer');
+      return null;
+    }
+    
+    // Handle both base64 encoded token and plain token
+    let decoded;
+    try {
+      decoded = JSON.parse(Buffer.from(token, 'base64').toString());
+    } catch (e) {
+      // If base64 decode fails, try parsing as JSON directly
+      try {
+        decoded = JSON.parse(token);
+      } catch (e2) {
+        console.error('[getUserId] Failed to decode token:', e2.message);
+        return null;
+      }
+    }
+    
+    if (!decoded || !decoded.userId) {
+      console.log('[getUserId] Decoded token does not contain userId:', decoded);
+      return null;
+    }
+    
+    // Check if token is expired
+    if (decoded.exp && decoded.exp < Date.now()) {
+      console.log('[getUserId] Token has expired');
+      return null;
+    }
+    
     return decoded.userId;
   } catch (e) {
+    console.error('[getUserId] Error decoding token:', e.message);
     return null;
   }
 };
@@ -26,7 +59,12 @@ router.post('/site-type', (req, res) => {
   try {
     const userId = getUserId(req);
     if (!userId) {
-      return res.status(401).json({ success: false, error: 'Unauthorized' });
+      console.error('No userId found in request. Auth header:', req.headers.authorization ? 'Present' : 'Missing');
+      return res.status(401).json({ 
+        success: false, 
+        error: 'Unauthorized',
+        message: 'User authentication required. Please login again.'
+      });
     }
 
     const { site_type, workflow_preference } = req.body;
@@ -34,7 +72,8 @@ router.post('/site-type', (req, res) => {
     if (!site_type || !workflow_preference) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: site_type and workflow_preference'
+        error: 'Missing required fields',
+        message: 'Both site_type and workflow_preference are required'
       });
     }
 
@@ -44,14 +83,16 @@ router.post('/site-type', (req, res) => {
     if (!validSiteTypes.includes(site_type)) {
       return res.status(400).json({
         success: false,
-        error: `Invalid site_type. Must be one of: ${validSiteTypes.join(', ')}`
+        error: 'Invalid site_type',
+        message: `site_type must be one of: ${validSiteTypes.join(', ')}`
       });
     }
 
     if (!validWorkflows.includes(workflow_preference)) {
       return res.status(400).json({
         success: false,
-        error: `Invalid workflow_preference. Must be one of: ${validWorkflows.join(', ')}`
+        error: 'Invalid workflow_preference',
+        message: `workflow_preference must be one of: ${validWorkflows.join(', ')}`
       });
     }
 
@@ -62,18 +103,26 @@ router.post('/site-type', (req, res) => {
       workflow_preference
     };
 
-    UserProfileModel.upsert(profile);
+    const result = UserProfileModel.upsert(profile);
+    
+    if (!result) {
+      throw new Error('Failed to save user profile to database');
+    }
+
+    // Fetch the saved profile to return complete data
+    const savedProfile = UserProfileModel.findByUserId(userId) || profile;
 
     res.json({
       success: true,
-      profile
+      profile: savedProfile
     });
   } catch (error) {
     console.error('Error in /wizard/site-type:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       error: 'Internal server error',
-      message: error.message
+      message: error.message || 'An unexpected error occurred while saving site type'
     });
   }
 });
@@ -526,4 +575,5 @@ router.get('/optimization/configs', (req, res) => {
 });
 
 module.exports = router;
+
 

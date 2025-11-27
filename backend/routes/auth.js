@@ -7,7 +7,17 @@ const UserModel = require('../database/models/users');
 // POST /api/v1/auth/token - Login endpoint
 router.post('/token', (req, res) => {
   try {
-    const { username, password } = req.body;
+    // Handle both JSON and form-urlencoded
+    const username = req.body.username || req.body.email;
+    const password = req.body.password;
+    
+    if (!username || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing credentials',
+        message: 'Username/email and password are required'
+      });
+    }
     
     // Find user by email
     const user = UserModel.findByEmail(username);

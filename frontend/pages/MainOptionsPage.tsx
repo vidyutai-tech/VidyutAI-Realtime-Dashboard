@@ -26,11 +26,11 @@ const MainOptionsPage: React.FC = () => {
     {
       id: 'planning',
       title: 'Planning Wizard',
-      description: 'Create a new energy system plan with load profiling, energy sources selection, and AI-powered recommendations',
+      description: 'Create a new energy system plan with site type selection, load profiling, energy sources selection, and AI-powered recommendations',
       icon: BarChart3,
       path: '/planning-wizard',
       color: 'from-blue-500 to-blue-600',
-      steps: '3-Step Process'
+      steps: '4-Step Process'
     },
     {
       id: 'optimization',

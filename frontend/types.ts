@@ -10,6 +10,8 @@ export interface Telemetry {
     current: number;
     frequency: number;
     thd?: number;
+    power_factor?: number;
+    voltage_unbalance?: number;
     temp_c: number;
     pv_generation?: number;
     pv_irradiance?: number;
@@ -24,12 +26,15 @@ export interface Telemetry {
 
 export interface Alert {
   id: string;
-  timestamp: string;
-  device_id: string;
-  severity: 'critical' | 'warning' | 'info';
+  timestamp?: string;
+  device_id?: string;
+  site_id?: string;
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'warning' | 'info';
+  type?: string;
+  title?: string;
   message: string;
-  diagnosis: string;
-  recommended_action: string;
+  diagnosis?: string;
+  recommended_action?: string;
   status: 'active' | 'acknowledged' | 'resolved';
 }
 
@@ -76,6 +81,11 @@ export interface HealthStatus {
   motor_health: number;
   pv_health: number;
   ev_charger_health: number;
+  power_quality_index?: number; // Overall power quality score (0-100)
+  voltage_quality?: number; // Voltage quality score
+  frequency_stability?: number; // Frequency stability score
+  thd_percentage?: number; // Total Harmonic Distortion percentage
+  power_factor?: number; // Power factor (0-1)
 }
 
 export interface APIKey {
@@ -98,7 +108,7 @@ export interface Site {
 export interface RLStrategy {
   cost_priority: number; // 0-100
   grid_stability_priority: number; // 0-100
-  battery_longevity_priority: number; // 0-100
+  battery_life_priority: number; // 0-100 (renamed from battery_longevity_priority)
 }
 
 // NEW: For Digital Twin

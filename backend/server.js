@@ -124,12 +124,12 @@ io.on('connection', (socket) => {
     socket.join(`site_${siteId}`);
     console.log(`Client ${socket.id} subscribed to site ${siteId}`);
 
-    // Send initial data from database
+    // Send initial data from database (latest available, not necessarily from last minute)
     const db = getDatabase();
     const latestData = db.prepare(`
       SELECT metric_type, metric_value, unit
       FROM timeseries_data
-      WHERE site_id = ? AND timestamp >= datetime('now', '-1 minute')
+      WHERE site_id = ?
       ORDER BY timestamp DESC
       LIMIT 20
     `).all(siteId);
@@ -142,12 +142,15 @@ io.on('connection', (socket) => {
       };
     });
 
-    socket.emit('site_data', {
-      siteId,
-      timestamp: new Date().toISOString(),
-      metrics,
-      message: 'Connected to site updates'
-    });
+    // Only send initial data if we have metrics, otherwise will be updated by broadcast interval
+    if (Object.keys(metrics).length > 0) {
+      socket.emit('site_data', {
+        siteId,
+        timestamp: new Date().toISOString(),
+        metrics,
+        message: 'Connected to site updates - updates every 10 minutes'
+      });
+    }
   });
 
   socket.on('disconnect', () => {
@@ -208,11 +211,23 @@ if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_SIMULATOR === 't
 
         // Also broadcast globally
         io.emit('metrics_update', realtimeData);
+        
+        // Check for power quality alerts and emit them
+        try {
+          const { checkPowerQualityForAlerts } = require('./services/power-quality-monitor');
+          const alerts = checkPowerQualityForAlerts(siteId, metrics);
+          alerts.forEach(alert => {
+            io.to(`site_${siteId}`).emit('alert', alert);
+            io.emit('alert', alert);
+          });
+        } catch (error) {
+          console.error('Error checking power quality alerts:', error);
+        }
       }
     });
   }, 600000); // 10 minutes
 
-  // Clean old data every hour (keep last 48 hours)
+  // Clean old data every 24 hours (keep last 48 hours)
   setInterval(() => {
     simulator.cleanOldData(48);
   }, 60 * 60 * 1000);
