@@ -61,6 +61,12 @@ class IITGNAnomalyDetectionInput(BaseModel):
         description="Dictionary of feature values for anomaly detection (flexible feature names)"
     )
 
+class BatteryRULInput(BaseModel):
+    features: dict = Field(
+        ...,
+        description="Dictionary of feature values for Battery RUL prediction. Should include battery metrics, load, PV power, etc."
+    )
+
 
 # --- Load ML Models on Startup ---
 
@@ -120,6 +126,27 @@ try:
         print("✅ IITGN Anomaly Detection Model loaded successfully.")
 except Exception as e:
     print(f"⚠️  IITGN models not available: {e}. Run training script to generate them.")
+
+# Load Battery RUL model (trained from synthetic data)
+try:
+    import json
+    battery_rul_model_path = models_dir / "battery_rul_model_random_forest.joblib"
+    battery_rul_scaler_path = models_dir / "battery_rul_scaler.joblib"
+    battery_rul_features_path = models_dir / "battery_rul_features.json"
+    battery_rul_summary_path = models_dir / "battery_rul_summary.json"
+    
+    if battery_rul_model_path.exists() and battery_rul_scaler_path.exists():
+        ml_models["battery_rul_model"] = joblib.load(battery_rul_model_path)
+        ml_models["battery_rul_scaler"] = joblib.load(battery_rul_scaler_path)
+        if battery_rul_features_path.exists():
+            with open(battery_rul_features_path, 'r') as f:
+                ml_models["battery_rul_features"] = json.load(f)
+        if battery_rul_summary_path.exists():
+            with open(battery_rul_summary_path, 'r') as f:
+                ml_models["battery_rul_summary"] = json.load(f)
+        print("✅ Battery RUL Model loaded successfully.")
+except Exception as e:
+    print(f"⚠️  Battery RUL model not available: {e}. Run train_battery_rul.py to generate it.")
 
 
 # --- API Endpoints ---
@@ -327,3 +354,67 @@ async def detect_iitgn_anomaly(
         "status": "anomaly" if is_anomaly else "normal",
         "confidence": abs(float(anomaly_score))
     }
+
+@router.post("/predict/battery-rul", response_model=dict)
+async def predict_battery_rul(
+    input_data: BatteryRULInput,
+    current_user: models.User = Depends(get_current_user)
+):
+    """Predict Battery Remaining Useful Life (RUL) in hours"""
+    if "battery_rul_model" not in ml_models:
+        raise HTTPException(
+            status_code=503,
+            detail="Battery RUL model is not available. Please train the model first using train_battery_rul.py"
+        )
+    
+    model = ml_models["battery_rul_model"]
+    scaler = ml_models["battery_rul_scaler"]
+    features_list = ml_models.get("battery_rul_features", [])
+    summary = ml_models.get("battery_rul_summary", {})
+    
+    # Create DataFrame with features in correct order
+    feature_values = [input_data.features.get(f, 0.0) for f in features_list]
+    input_df = pd.DataFrame([feature_values], columns=features_list)
+    
+    # Fill missing values with 0
+    input_df = input_df.fillna(0)
+    
+    # Scale and predict
+    scaled_features = scaler.transform(input_df)
+    prediction = model.predict(scaled_features)[0]
+    
+    # Calculate confidence interval (using validation residuals from training)
+    # For simplicity, use a fixed confidence interval based on test RMSE
+    test_rmse = summary.get("test_rmse", 0.1)
+    ci_lower = max(0, prediction - 1.96 * test_rmse)  # 95% CI
+    ci_upper = prediction + 1.96 * test_rmse
+    
+    return {
+        "rul_hours": float(prediction),
+        "ci_lower": float(ci_lower),
+        "ci_upper": float(ci_upper),
+        "model_info": {
+            "model_name": summary.get("model_name", "random_forest"),
+            "test_r2": summary.get("test_r2"),
+            "test_mae": summary.get("test_mae"),
+            "test_rmse": summary.get("test_rmse")
+        }
+    }
+
+@router.get("/predict/battery-rul/dashboard", response_model=dict)
+async def get_battery_rul_dashboard(
+    current_user: models.User = Depends(get_current_user)
+):
+    """Get Battery RUL dashboard data with predictions and visualization"""
+    dashboard_file = models_dir / "dashboard_outputs" / "battery_rul_predictions_site_1.json"
+    
+    if not dashboard_file.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Dashboard data not found. Please run train_battery_rul.py to generate it."
+        )
+    
+    with open(dashboard_file, 'r') as f:
+        dashboard_data = json.load(f)
+    
+    return dashboard_data

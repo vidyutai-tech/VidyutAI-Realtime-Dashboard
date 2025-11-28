@@ -26,14 +26,13 @@ const EnergyForecastingPage: React.FC = () => {
   const navigate = useNavigate();
   const { selectedSite, theme } = useContext(AppContext)!;
   
-  const [selectedType, setSelectedType] = useState<'production' | 'demand' | 'consumption'>('consumption');
+  const [selectedType, setSelectedType] = useState<'production' | 'consumption'>('consumption');
   const [forecastHours, setForecastHours] = useState<number>(24);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   
   // Forecast data states
   const [productionForecast, setProductionForecast] = useState<any>(null);
-  const [demandForecast, setDemandForecast] = useState<any>(null);
   const [consumptionForecast, setConsumptionForecast] = useState<any>(null);
   const [aiExplanation, setAiExplanation] = useState<string>('');
   const [explaining, setExplaining] = useState(false);
@@ -41,7 +40,7 @@ const EnergyForecastingPage: React.FC = () => {
   const gridColor = theme === 'dark' ? '#374151' : '#e5e7eb';
   const textColor = theme === 'dark' ? '#9ca3af' : '#6b7281';
 
-  const handleForecast = async (type: 'production' | 'demand' | 'consumption') => {
+  const handleForecast = async (type: 'production' | 'consumption') => {
     setLoading(true);
     setError('');
     
@@ -56,8 +55,6 @@ const EnergyForecastingPage: React.FC = () => {
         // Update corresponding state
         if (type === 'production') {
           setProductionForecast(result);
-        } else if (type === 'demand') {
-          setDemandForecast(result);
         } else {
           setConsumptionForecast(result);
         }
@@ -109,11 +106,10 @@ const EnergyForecastingPage: React.FC = () => {
   const currentForecast = useMemo(() => {
     switch (selectedType) {
       case 'production': return productionForecast;
-      case 'demand': return demandForecast;
       case 'consumption': return consumptionForecast;
       default: return null;
     }
-  }, [selectedType, productionForecast, demandForecast, consumptionForecast]);
+  }, [selectedType, productionForecast, consumptionForecast]);
 
   const chartData = useMemo(() => {
     return formatChartData(currentForecast);
@@ -126,7 +122,7 @@ const EnergyForecastingPage: React.FC = () => {
     title, 
     description 
   }: { 
-    type: 'production' | 'demand' | 'consumption';
+    type: 'production' | 'consumption';
     icon: React.ElementType;
     colorClasses: {
       border: string;
@@ -137,9 +133,7 @@ const EnergyForecastingPage: React.FC = () => {
     title: string;
     description: string;
   }) => {
-    const forecast = type === 'production' ? productionForecast : 
-                     type === 'demand' ? demandForecast : 
-                     consumptionForecast;
+    const forecast = type === 'production' ? productionForecast : consumptionForecast;
     const summary = forecast?.summary;
 
     return (
@@ -212,7 +206,7 @@ const EnergyForecastingPage: React.FC = () => {
             Energy Forecasting Analysis
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Forecast energy production, demand, and consumption using ML models trained on IITGN data
+            Forecast energy production and consumption using ML models trained on IITGN data
           </p>
         </div>
 
@@ -223,7 +217,7 @@ const EnergyForecastingPage: React.FC = () => {
         )}
 
         {/* Forecast Type Selection */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <ForecastCard
             type="production"
             icon={Sun}
@@ -235,18 +229,6 @@ const EnergyForecastingPage: React.FC = () => {
             }}
             title="Energy Production"
             description="Solar/Renewable generation forecast"
-          />
-          <ForecastCard
-            type="demand"
-            icon={Activity}
-            colorClasses={{
-              border: "border-blue-500",
-              bg: "bg-blue-100 dark:bg-blue-900/30",
-              icon: "text-blue-600 dark:text-blue-400",
-              button: "bg-blue-600 hover:bg-blue-700"
-            }}
-            title="Energy Demand"
-            description="Total energy requirement forecast"
           />
           <ForecastCard
             type="consumption"
@@ -336,10 +318,6 @@ const EnergyForecastingPage: React.FC = () => {
                         <stop offset="5%" stopColor="#eab308" stopOpacity={0.3}/>
                         <stop offset="95%" stopColor="#eab308" stopOpacity={0}/>
                       </linearGradient>
-                      <linearGradient id="colorDemand" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                      </linearGradient>
                       <linearGradient id="colorConsumption" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
                         <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
@@ -375,7 +353,7 @@ const EnergyForecastingPage: React.FC = () => {
                     <Area 
                       type="monotone" 
                       dataKey="value" 
-                      stroke={selectedType === 'production' ? '#eab308' : selectedType === 'demand' ? '#3b82f6' : '#10b981'}
+                      stroke={selectedType === 'production' ? '#eab308' : '#10b981'}
                       strokeWidth={2}
                       fill={`url(#color${selectedType.charAt(0).toUpperCase() + selectedType.slice(1)})`}
                       fillOpacity={0.6}
@@ -389,7 +367,7 @@ const EnergyForecastingPage: React.FC = () => {
                     <Line 
                       type="monotone" 
                       dataKey="value" 
-                      stroke={selectedType === 'production' ? '#eab308' : selectedType === 'demand' ? '#3b82f6' : '#10b981'}
+                      stroke={selectedType === 'production' ? '#eab308' : '#10b981'}
                       strokeWidth={2}
                       dot={false}
                     />

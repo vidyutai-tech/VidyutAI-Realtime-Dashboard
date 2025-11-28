@@ -241,6 +241,29 @@ export const runMotorFaultDiagnosis = async (): Promise<{ prediction: string; co
   return response.json();
 };
 
+export const getBatteryRULDashboard = async (): Promise<{
+  site_id: number;
+  model: string;
+  predictions: Array<{
+    timestamp: string;
+    prediction: number;
+    ci_lower: number;
+    ci_upper: number;
+    actual?: number;
+    top_features?: Array<[string, number]>;
+  }>;
+  summary: {
+    test_mae: number;
+    test_rmse: number;
+    test_r2: number;
+    last_true?: number;
+  };
+}> => {
+  const response = await fetch(`${API_BASE_URL}/predict/battery-rul/dashboard`, { headers: getAuthHeaders() });
+  if (!response.ok) throw new Error('Failed to fetch Battery RUL dashboard data');
+  return response.json();
+};
+
 // --- Energy Forecasting ---
 export interface ForecastInput {
   site_id?: string | null;

@@ -1,0 +1,35 @@
+{
+  "generated_date": "2025-11-28T11:19:24.562991",
+  "date_range": {
+    "start": "2025-10-28T00:00:00",
+    "end": "2025-11-28T00:00:00",
+    "total_hours": 744
+  },
+  "files": [
+    {
+      "path": "site_metadata.csv",
+      "rows": 1,
+      "desc": "Site metadata (1 site)"
+    },
+    {
+      "path": "hourly_timeseries_site_1.csv",
+      "rows": 744,
+      "desc": "Hourly timeseries (31.0 days)"
+    },
+    {
+      "path": "battery_health_events.csv",
+      "rows": 1,
+      "desc": "Battery events (sample)"
+    },
+    {
+      "path": "pv_performance_summary_site_1.csv",
+      "rows": 1,
+      "desc": "PV monthly summary (sample)"
+    },
+    {
+      "path": "tariff_and_fuel_prices.csv",
+      "rows": 744,
+      "desc": "Hourly tariff and fuel price series"
+    }
+  ]
+}

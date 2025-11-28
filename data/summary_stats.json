@@ -1,0 +1,18 @@
+{
+  "pv_power_mean_kW": 3.4699986559139786,
+  "pv_power_std_kW": 3.790318972042224,
+  "pv_power_max_kW": 10.2,
+  "pv_power_min_kW": 0.0,
+  "load_mean_kW": 1.6230268817204303,
+  "load_max_kW": 3.483,
+  "battery_soc_mean_pct": 53.378602150537645,
+  "battery_soc_min_pct": 13.89,
+  "battery_soc_max_pct": 100.0,
+  "grid_import_total_kWh": 266.847,
+  "total_emissions_kgCO2": 218.8226,
+  "total_cost_Rs": 2167.407,
+  "rul_hours_min": 11.46,
+  "rul_hours_max": 37.63,
+  "anomaly_count": 8,
+  "maintenance_count": 4
+}
