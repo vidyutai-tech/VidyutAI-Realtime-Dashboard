@@ -61,10 +61,17 @@ const ManageAssetsPage: React.FC = () => {
     };
     
     const getStatusInfo = (status: MaintenanceAsset['status']) => {
+        if (!status) return { icon: <HardDrive className="w-4 h-4 text-gray-500"/>, text: 'Unknown', color: 'text-gray-500' };
+        
         switch (status) {
             case 'operational': return { icon: <Zap className="w-4 h-4 text-green-500"/>, text: 'Operational', color: 'text-green-500' };
+            case 'online': return { icon: <Zap className="w-4 h-4 text-green-500"/>, text: 'Online', color: 'text-green-500' };
             case 'degraded': return { icon: <AlertTriangle className="w-4 h-4 text-yellow-500"/>, text: 'Degraded', color: 'text-yellow-500' };
+            case 'warning': return { icon: <AlertTriangle className="w-4 h-4 text-yellow-500"/>, text: 'Warning', color: 'text-yellow-500' };
             case 'offline': return { icon: <Wrench className="w-4 h-4 text-red-500"/>, text: 'Offline', color: 'text-red-500' };
+            case 'maintenance': return { icon: <Wrench className="w-4 h-4 text-blue-500"/>, text: 'Maintenance', color: 'text-blue-500' };
+            case 'error': return { icon: <AlertTriangle className="w-4 h-4 text-red-500"/>, text: 'Error', color: 'text-red-500' };
+            default: return { icon: <HardDrive className="w-4 h-4 text-gray-500"/>, text: status, color: 'text-gray-500' };
         }
     }
 
@@ -103,10 +110,17 @@ const ManageAssetsPage: React.FC = () => {
                                     const statusInfo = getStatusInfo(asset.status);
                                     return (
                                         <tr key={asset.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
-                                            <td className="p-3 font-medium text-gray-900 dark:text-white">{asset.name}</td>
-                                            <td className="p-3 text-gray-500 dark:text-gray-400">{asset.type}</td>
-                                            <td className="p-3 text-gray-500 dark:text-gray-400">{asset.modelNumber}</td>
-                                            <td className="p-3 text-gray-500 dark:text-gray-400">{new Date(asset.installDate).toLocaleDateString()}</td>
+                                            <td className="p-3 font-medium text-gray-900 dark:text-white">{asset.name || 'Unnamed Asset'}</td>
+                                            <td className="p-3 text-gray-500 dark:text-gray-400">{asset.type || '-'}</td>
+                                            <td className="p-3 text-gray-500 dark:text-gray-400">{asset.modelNumber || '-'}</td>
+                                            <td className="p-3 text-gray-500 dark:text-gray-400">
+                                                {asset.installDate 
+                                                    ? (isNaN(new Date(asset.installDate).getTime()) 
+                                                        ? '-' 
+                                                        : new Date(asset.installDate).toLocaleDateString())
+                                                    : '-'
+                                                }
+                                            </td>
                                             <td className={`p-3 font-semibold flex items-center ${statusInfo.color}`}>{statusInfo.icon} <span className="ml-2">{statusInfo.text}</span></td>
                                             <td className="p-3 text-right">
                                                 <button onClick={() => handleOpenModal(asset)} className="p-2 text-gray-500 hover:text-blue-600"><Edit className="w-5 h-5"/></button>

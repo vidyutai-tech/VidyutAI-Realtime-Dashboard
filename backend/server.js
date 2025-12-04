@@ -18,6 +18,7 @@ const predictionsRoutes = require('./routes/predictions');
 const mlPredictionsRoutes = require('./routes/ml-predictions');
 const actionsRoutes = require('./routes/actions');
 const wizardRoutes = require('./routes/wizard');
+const planningRoutes = require('./routes/planning');
 
 // Initialize Express app
 const app = express();
@@ -72,6 +73,7 @@ app.use('/api/v1/predictions', predictionsRoutes);
 app.use('/api/v1/predict', mlPredictionsRoutes);
 app.use('/api/v1/actions', actionsRoutes);
 app.use('/api/v1/wizard', wizardRoutes);
+app.use('/api/v1/planning', planningRoutes);
 
 // Simulator endpoint (also available as /api/v1/simulate for convenience)
 app.post('/api/v1/simulate', async (req, res) => {

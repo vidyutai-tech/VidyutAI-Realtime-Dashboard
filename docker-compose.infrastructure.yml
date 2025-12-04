@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # TimescaleDB
+  timescaledb:
+    image: timescale/timescaledb:latest-pg14
+    container_name: vidyutai_timescaledb
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: vidyutai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: vidyutai_password
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./backend/database/timescale-schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vidyutai_network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: vidyutai_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - vidyutai_network
+
+  # MQTT Broker
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: vidyutai_mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 5 mosquitto_sub -t '$$SYS/#' -C 1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vidyutai_network
+
+volumes:
+  timescale_data:
+  redis_data:
+  mosquitto_data:
+  mosquitto_logs:
+
+networks:
+  vidyutai_network:
+    driver: bridge
+

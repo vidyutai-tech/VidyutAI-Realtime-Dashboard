@@ -28,16 +28,6 @@ const AIMLInsightsPage: React.FC = () => {
       gradient: 'bg-gradient-to-br from-purple-500 to-pink-600'
     },
     {
-      id: 'recommendations',
-      title: 'Smart Recommendations',
-      description: 'AI-powered actionable recommendations for load shifting, tariff optimization, and battery tuning. Intelligent suggestions based on real-time energy data and patterns.',
-      icon: Lightbulb,
-      path: '/ai-recommendations',
-      color: 'from-blue-500 via-cyan-500 to-blue-600',
-      category: 'Recommendations',
-      gradient: 'bg-gradient-to-br from-blue-500 to-cyan-600'
-    },
-    {
       id: 'explanations',
       title: 'AI Explanations',
       description: 'Get natural language explanations for all AI recommendations and insights. Understand the reasoning behind predictions and actions in plain, actionable language powered by Groq AI.',
@@ -119,7 +109,7 @@ const AIMLInsightsPage: React.FC = () => {
               AI/ML Capabilities Overview
             </h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-gray-700 dark:text-gray-300">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-gray-700 dark:text-gray-300">
             <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-indigo-100 dark:border-indigo-900 shadow-sm">
               <div className="flex items-center mb-2">
                 <BarChart3 className="w-5 h-5 text-indigo-600 dark:text-indigo-400 mr-2" />
@@ -136,15 +126,6 @@ const AIMLInsightsPage: React.FC = () => {
               </div>
               <p className="text-sm leading-relaxed">
                 RandomForest, XGBoost, and LSTM models for motor diagnostics, fault detection, and solar power forecasting.
-              </p>
-            </div>
-            <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-blue-100 dark:border-blue-900 shadow-sm">
-              <div className="flex items-center mb-2">
-                <Lightbulb className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" />
-                <p className="font-bold text-gray-900 dark:text-white">Smart Recommendations</p>
-              </div>
-              <p className="text-sm leading-relaxed">
-                AI-driven suggestions for load shifting, tariff optimization, and battery management based on real-time data analysis.
               </p>
             </div>
             <div className="bg-white dark:bg-gray-800 p-5 rounded-xl border border-orange-100 dark:border-orange-900 shadow-sm">

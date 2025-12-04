@@ -162,9 +162,10 @@ export const rejectRLSuggestion = async (siteId: string, suggestionId: string): 
 
 // --- Asset Management ---
 export const fetchAssetsForSite = async (siteId: string): Promise<MaintenanceAsset[]> => {
-  const response = await fetch(`${API_BASE_URL}/sites/${siteId}/assets`, { headers: getAuthHeaders() });
+  const response = await fetch(`${API_BASE_URL}/assets?siteId=${siteId}`, { headers: getAuthHeaders() });
   if (!response.ok) throw new Error('Failed to fetch assets');
-  return response.json();
+  const result = await response.json();
+  return result.data || result; // Handle both formats
 };
 
 export const createAsset = async (assetData: Omit<MaintenanceAsset, 'id' | 'failure_probability' | 'rank'>): Promise<MaintenanceAsset> => {
@@ -174,7 +175,8 @@ export const createAsset = async (assetData: Omit<MaintenanceAsset, 'id' | 'fail
     body: JSON.stringify(assetData)
   });
   if (!response.ok) throw new Error('Failed to create asset');
-  return response.json();
+  const result = await response.json();
+  return result.data || result; // Handle both formats
 };
 
 export const updateAsset = async (assetData: MaintenanceAsset): Promise<MaintenanceAsset> => {
@@ -184,7 +186,8 @@ export const updateAsset = async (assetData: MaintenanceAsset): Promise<Maintena
     body: JSON.stringify(assetData)
   });
   if (!response.ok) throw new Error('Failed to update asset');
-  return response.json();
+  const result = await response.json();
+  return result.data || result; // Handle both formats
 };
 
 export const deleteAsset = async (assetId: string): Promise<{ success: boolean }> => {
@@ -241,26 +244,28 @@ export const runMotorFaultDiagnosis = async (): Promise<{ prediction: string; co
   return response.json();
 };
 
-export const getBatteryRULDashboard = async (): Promise<{
-  site_id: number;
-  model: string;
-  predictions: Array<{
-    timestamp: string;
-    prediction: number;
-    ci_lower: number;
-    ci_upper: number;
-    actual?: number;
-    top_features?: Array<[string, number]>;
-  }>;
-  summary: {
-    test_mae: number;
-    test_rmse: number;
-    test_r2: number;
-    last_true?: number;
-  };
-}> => {
-  const response = await fetch(`${API_BASE_URL}/predict/battery-rul/dashboard`, { headers: getAuthHeaders() });
-  if (!response.ok) throw new Error('Failed to fetch Battery RUL dashboard data');
+// --- AI Predictions ---
+export const getBatteryRULDashboard = async () => {
+  const response = await fetch(`${getAIServiceURL()}/api/v1/predictions/battery-rul/dashboard`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to fetch Battery RUL dashboard');
+  return response.json();
+};
+
+export const getSolarDegradationDashboard = async () => {
+  const response = await fetch(`${getAIServiceURL()}/api/v1/predictions/solar-degradation/dashboard`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to fetch Solar Degradation dashboard');
+  return response.json();
+};
+
+export const getEnergyLossDashboard = async () => {
+  const response = await fetch(`${getAIServiceURL()}/api/v1/predictions/energy-loss/dashboard`, {
+    headers: getAuthHeaders()
+  });
+  if (!response.ok) throw new Error('Failed to fetch Energy Loss dashboard');
   return response.json();
 };
 

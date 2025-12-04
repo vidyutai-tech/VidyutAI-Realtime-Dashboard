@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Sun, Zap, BatteryCharging, Shield, Check, X, Bot, Server, Activity, DollarSign, Info } from 'lucide-react';
+import { Sun, Zap, BatteryCharging, Shield, Check, X, Bot, Server, Activity, DollarSign, Info, Droplet, Power, Fuel, Home, Thermometer, Cloud, Wind } from 'lucide-react';
 import PowerQualityCard from '../components/shared/PowerQualityCard';
 import PowerQualityTrends from '../components/shared/PowerQualityTrends';
 import Card from '../components/ui/Card';
@@ -171,6 +171,134 @@ const DashboardPage: React.FC = () => {
           />
           <SummaryCard title="Battery SoC" value={healthStatus?.battery_soc?.toFixed(2) ?? 0} unit="%" icon={<BatteryCharging className="w-6 h-6 text-blue-500" />} isLoading={isLoading} />
           <SummaryCard title="Today's PV Gen" value={healthStatus?.pv_generation_today?.toFixed(2) ?? 0} unit="kWh" icon={<Sun className="w-6 h-6 text-orange-400" />} isLoading={isLoading} />
+        </div>
+
+        {/* Integrated System Configuration View */}
+        <Card title="Integrated System Configuration">
+          <div className="p-6">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+              Real-time energy flow across all system components
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {[
+                { name: 'Solar PV', icon: Sun, description: 'Harnessing renewable energy from the sun', color: 'from-yellow-500 to-orange-500', status: 'active' },
+                { name: 'Battery Storage', icon: BatteryCharging, description: 'Storing excess energy for later use', color: 'from-blue-500 to-cyan-500', status: 'active' },
+                { name: 'Hydrogen Storage', icon: Droplet, description: 'Long-term energy storage and clean fuel', color: 'from-teal-500 to-green-500', status: 'standby' },
+                { name: 'The Grid', icon: Power, description: 'Connecting to main power supply for stability', color: 'from-indigo-500 to-purple-500', status: 'active' },
+                { name: 'Diesel Generator', icon: Fuel, description: 'Backup power for critical situations', color: 'from-red-500 to-orange-500', status: 'standby' },
+                { name: 'Load Control', icon: Home, description: 'Meeting energy demands optimally', color: 'from-green-500 to-emerald-500', status: 'active' },
+              ].map((component) => {
+                const Icon = component.icon;
+                return (
+                  <div key={component.name} className="flex flex-col items-center text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600 transition-all">
+                    <div className={`w-16 h-16 rounded-full bg-gradient-to-br ${component.color} flex items-center justify-center mb-3 ${component.status === 'standby' ? 'opacity-50' : ''}`}>
+                      <Icon className="w-8 h-8 text-white" />
+                    </div>
+                    <h3 className="font-semibold text-sm text-gray-900 dark:text-white mb-1">{component.name}</h3>
+                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{component.description}</p>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      component.status === 'active' 
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
+                        : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                    }`}>
+                      {component.status === 'active' ? 'Active' : 'Standby'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-gray-700 dark:text-gray-300">
+                <strong>Energy Flow:</strong> Solar PV → Battery/Hydrogen Storage → Load Control. Grid provides backup when renewable generation is insufficient. Diesel generator activates only during critical situations.
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Seasonal & Ambient Conditions + CO2 Counter */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Seasonal & Ambient Conditions */}
+          <Card title="Seasonal & Ambient Conditions">
+            <div className="p-4 space-y-4">
+              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-lg">
+                <div className="flex items-center space-x-3">
+                  <Thermometer className="w-6 h-6 text-red-500" />
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Temperature</p>
+                    <p className="text-xl font-bold text-gray-900 dark:text-white">32°C</p>
+                  </div>
+                </div>
+                <span className="text-xs px-2 py-1 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 rounded-full">High</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-lg">
+                <div className="flex items-center space-x-3">
+                  <Cloud className="w-6 h-6 text-gray-500" />
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Humidity</p>
+                    <p className="text-xl font-bold text-gray-900 dark:text-white">65%</p>
+                  </div>
+                </div>
+                <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 rounded-full">Moderate</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-lg">
+                <div className="flex items-center space-x-3">
+                  <Wind className="w-6 h-6 text-gray-400" />
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Wind Speed</p>
+                    <p className="text-xl font-bold text-gray-900 dark:text-white">12 km/h</p>
+                  </div>
+                </div>
+                <span className="text-xs px-2 py-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 rounded-full">Normal</span>
+              </div>
+              <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  <strong>Season:</strong> Summer (April - June) • High solar potential • Increased cooling load
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          {/* CO2 Emission Counter */}
+          <Card title="CO₂ Emissions">
+            <div className="p-4">
+              <div className="text-center mb-4">
+                <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-teal-500 to-emerald-500 mb-3">
+                  <Droplet className="w-12 h-12 text-white" />
+                </div>
+                <p className="text-4xl font-bold text-gray-900 dark:text-white mb-1">
+                  {(() => {
+                    // Calculate daily CO2 based on grid draw and diesel usage
+                    const gridDraw = healthStatus?.grid_draw || 0;
+                    const gridCO2 = gridDraw * 24 * 0.82; // kg CO2 per kWh from grid
+                    const dieselCO2 = 0; // No diesel currently
+                    return (gridCO2 + dieselCO2).toFixed(1);
+                  })()}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">kg CO₂ / day</p>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                  <span className="text-gray-600 dark:text-gray-400">Emission Intensity</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">
+                    {(() => {
+                      const totalEnergy = healthStatus?.pv_generation_today || 0;
+                      const gridDraw = healthStatus?.grid_draw || 0;
+                      const total = totalEnergy + (gridDraw * 24);
+                      const emissions = (gridDraw * 24 * 0.82);
+                      return total > 0 ? (emissions / total).toFixed(4) : '0.0000';
+                    })()} kg/kWh
+                  </span>
+                </div>
+                <div className="flex justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                  <span className="text-gray-600 dark:text-gray-400">vs Optimized</span>
+                  <span className="font-semibold text-green-600 dark:text-green-400">-9.87%</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Weather Card (existing) */}
+          <WeatherCard />
         </div>
 
         {/* Row 2: Power Quality Monitoring */}

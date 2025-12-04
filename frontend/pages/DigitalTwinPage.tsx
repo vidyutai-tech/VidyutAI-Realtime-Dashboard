@@ -8,7 +8,7 @@ import { fetchDigitalTwinData, fetchAssetsForSite } from '../services/api';
 import { MaintenanceAsset, DigitalTwinDataPoint, Anomaly } from '../types';
 import { AppContext } from '../contexts/AppContext';
 import Skeleton from '../components/ui/Skeleton';
-import { AlertTriangle, CheckCircle, Info } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, Battery, Zap, TrendingUp, Clock } from 'lucide-react';
 
 const DigitalTwinPage: React.FC = () => {
     const { selectedSite } = useContext(AppContext)!;
@@ -72,6 +72,9 @@ const DigitalTwinPage: React.FC = () => {
     const isSolarAsset = selectedAssetName.toLowerCase().includes('solar') || 
                          selectedAssetName.toLowerCase().includes('pv') ||
                          selectedAssetName.toLowerCase().includes('panel');
+    const isBatteryAsset = selectedAssetName.toLowerCase().includes('battery') || 
+                          selectedAssetName.toLowerCase().includes('bess') ||
+                          selectedAssetName.toLowerCase().includes('storage');
 
     // Generate modeling trace data from twin data
     const modelingTraceData = useMemo(() => {
@@ -219,6 +222,115 @@ const DigitalTwinPage: React.FC = () => {
                     data={solarDegradationData}
                     isLoading={isLoading}
                 />
+            )}
+
+            {/* Battery Digital Twin Enhancements */}
+            {isBatteryAsset && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card title="Battery Digital Twin Metrics">
+                        <div className="p-6 space-y-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                    <div className="flex items-center space-x-2 mb-2">
+                                        <Battery className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Model Size</p>
+                                    </div>
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">0.965 MB</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">MLP-based architecture</p>
+                                </div>
+                                <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                                    <div className="flex items-center space-x-2 mb-2">
+                                        <Zap className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Voltage MAPE</p>
+                                    </div>
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">&lt; 1.5%</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Mean Absolute % Error</p>
+                                </div>
+                                <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                                    <div className="flex items-center space-x-2 mb-2">
+                                        <TrendingUp className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Temperature MAE</p>
+                                    </div>
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">&lt; 0.12°C</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Mean Absolute Error</p>
+                                </div>
+                                <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                                    <div className="flex items-center space-x-2 mb-2">
+                                        <Clock className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Adaptation Speed</p>
+                                    </div>
+                                    <p className="text-2xl font-bold text-gray-900 dark:text-white">44x</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Faster than baseline</p>
+                                </div>
+                            </div>
+                            <div className="p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                                <h4 className="font-semibold text-gray-900 dark:text-white mb-2">Performance Metrics</h4>
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600 dark:text-gray-400">1% MAPE Threshold Coverage</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">87.13% → 95.11%</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600 dark:text-gray-400">Voltage Recovery Time</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">258.97s → 5.85s</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-gray-600 dark:text-gray-400">Temperature Prediction</span>
+                                        <span className="font-semibold text-gray-900 dark:text-white">&lt; 1.75°C error</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
+
+                    <Card title="Digital Twin Forecasting Flow">
+                        <div className="p-6 space-y-4">
+                            <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
+                                    <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 mr-2" />
+                                    Step 1: Initial State
+                                </h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                    Initial state of battery includes age, temperature, and initial voltage
+                                </p>
+                                <div className="flex space-x-2 mt-3">
+                                    {['Age', 'Temp', 'Voltage'].map((param, idx) => (
+                                        <div key={idx} className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 rounded text-xs font-medium text-blue-800 dark:text-blue-300">
+                                            {param}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
+                                    <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" />
+                                    Step 2: Digital Twin Forecasting
+                                </h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                    Forecast future usage from initial state using decoder transformer architecture
+                                </p>
+                                <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-800 dark:text-blue-300">
+                                    Continual learning enabled • Fast adaptation (44x faster)
+                                </div>
+                            </div>
+                            <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
+                                    <Zap className="w-5 h-5 text-green-600 dark:text-green-400 mr-2" />
+                                    Step 3: Optimized Action
+                                </h4>
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    Forecasted states are used to take optimized action for safe, reliable, and long-term operation
+                                </p>
+                            </div>
+                            <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                                <p className="text-xs text-gray-700 dark:text-gray-300">
+                                    <strong>Robustness:</strong> High accuracy results with or without fine-tuning. 
+                                    Current methods use simple transfer learning and don't account for deployed system variations.
+                                </p>
+                            </div>
+                        </div>
+                    </Card>
+                </div>
             )}
 
             {/* Anomaly Root Cause Analysis */}

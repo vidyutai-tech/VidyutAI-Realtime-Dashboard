@@ -35,6 +35,8 @@ const OptimizationSetupPage: React.FC = () => {
     battery_capacity: 4000000,  // Wh
     battery_voltage: 100,
     diesel_capacity: 2200,
+    storage_type: 'battery', // 'battery', 'phes', 'hybrid'
+    phes_capacity: 10000, // kWh
     
     // Hydrogen System Parameters
     electrolyzer_capacity: 1000.0,
@@ -306,6 +308,25 @@ const OptimizationSetupPage: React.FC = () => {
 
                 <div className={controlWrapperClass}>
                   <label className="label">
+                    <span className={labelClass}>Storage Type</span>
+                  </label>
+                  <select
+                    name="storage_type"
+                    value={formData.storage_type}
+                    onChange={handleInputChange}
+                    className={selectClass}
+                  >
+                    <option value="battery">Battery Energy Storage (BESS)</option>
+                    <option value="phes">Pumped Hydro Energy Storage (PHES)</option>
+                    <option value="hybrid">Hybrid (BESS + PHES)</option>
+                  </select>
+                  <label className="label">
+                    <span className="label-text-alt">Select primary storage technology</span>
+                  </label>
+                </div>
+
+                <div className={controlWrapperClass}>
+                  <label className="label">
                     <span className={labelClass}>Battery Capacity (Wh)</span>
                   </label>
                   <input
@@ -315,7 +336,13 @@ const OptimizationSetupPage: React.FC = () => {
                     onChange={handleInputChange}
                     className={inputClass}
                     step="1000"
+                    disabled={formData.storage_type === 'phes'}
                   />
+                  {formData.storage_type === 'phes' && (
+                    <label className="label">
+                      <span className="label-text-alt text-gray-500">Disabled for PHES-only mode</span>
+                    </label>
+                  )}
                 </div>
 
                 <div className={controlWrapperClass}>
@@ -329,8 +356,33 @@ const OptimizationSetupPage: React.FC = () => {
                     onChange={handleInputChange}
                     className={inputClass}
                     step="10"
+                    disabled={formData.storage_type === 'phes'}
                   />
+                  {formData.storage_type === 'phes' && (
+                    <label className="label">
+                      <span className="label-text-alt text-gray-500">Disabled for PHES-only mode</span>
+                    </label>
+                  )}
                 </div>
+
+                {(formData.storage_type === 'phes' || formData.storage_type === 'hybrid') && (
+                  <div className={controlWrapperClass}>
+                    <label className="label">
+                      <span className={labelClass}>PHES Capacity (kWh)</span>
+                    </label>
+                    <input
+                      type="number"
+                      name="phes_capacity"
+                      value={formData.phes_capacity}
+                      onChange={handleInputChange}
+                      className={inputClass}
+                      step="100"
+                    />
+                    <label className="label">
+                      <span className="label-text-alt">Large-scale, long-duration pumped hydro storage</span>
+                    </label>
+                  </div>
+                )}
 
                 <div className={controlWrapperClass}>
                   <label className="label">

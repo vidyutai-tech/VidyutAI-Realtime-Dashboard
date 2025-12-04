@@ -22,8 +22,8 @@ const optimizationNavItems = [
 
 const aiMlNavItems = [
   { name: 'AI/ML Insights', path: '/ai-ml-insights', icon: Bot },
+  { name: 'Energy Forecasting', path: '/energy-forecasting', icon: TrendingUp },
   { name: 'AI Predictions', path: '/predictions', icon: Bot },
-  { name: 'Smart Recommendations', path: '/ai-recommendations', icon: Lightbulb },
   { name: 'AI Explanations', path: '/ai-explanations', icon: MessageSquare },
 ];
 
@@ -31,11 +31,15 @@ const dashboardNavItems = [
   { name: 'Unified Dashboard', path: '/unified-dashboard', icon: LayoutDashboard },
   { name: 'Operations Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { name: 'Site Detail', path: '/site-detail', icon: AreaChart },
-  { name: 'Impact Analysis', path: '/impact', icon: TrendingUp },
   { name: 'Digital Twin', path: '/digital-twin', icon: Share2 },
   { name: 'Simulator', path: '/simulator', icon: SlidersHorizontal },
   { name: 'Alerts', path: '/alerts', icon: AlertTriangle },
   { name: 'Maintenance', path: '/maintenance', icon: Wrench },
+];
+
+const impactActionsNavItems = [
+  { name: 'Actionable Insights', path: '/ai-recommendations', icon: Lightbulb },
+  { name: 'Impact Analysis', path: '/impact', icon: TrendingUp },
 ];
 
 const managementNavItems = [
@@ -51,8 +55,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setSidebarOpen }) => {
   // Determine which pipeline section is active
   const isPlanningActive = currentPath.includes('/planning-wizard');
   const isOptimizationActive = currentPath.includes('/optimization') || currentPath.includes('/demand-optimization') || currentPath.includes('/source-optimization');
-  const isAIMLActive = currentPath.includes('/ai-ml') || currentPath.includes('/predictions') || currentPath.includes('/ai-recommendations') || currentPath.includes('/ai-explanations') || currentPath.includes('/energy-forecasting');
-  const isDashboardActive = currentPath.includes('/unified-dashboard') || currentPath.includes('/dashboard') || currentPath.includes('/site-detail') || currentPath.includes('/impact') || currentPath.includes('/digital-twin') || currentPath.includes('/simulator') || currentPath.includes('/alerts') || currentPath.includes('/maintenance');
+  const isAIMLActive = currentPath.includes('/ai-ml') || currentPath.includes('/predictions') || currentPath.includes('/ai-explanations') || currentPath.includes('/energy-forecasting');
+  const isDashboardActive = currentPath.includes('/unified-dashboard') || currentPath.includes('/dashboard') || currentPath.includes('/site-detail') || currentPath.includes('/digital-twin') || currentPath.includes('/simulator') || currentPath.includes('/alerts') || currentPath.includes('/maintenance');
+  const isImpactActionsActive = currentPath.includes('/ai-recommendations') || currentPath.includes('/impact');
 
   const NavItem: React.FC<{ item: { name: string; path: string; icon: any } }> = ({ item }) => (
     <NavLink
@@ -126,6 +131,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setSidebarOpen }) => {
             <NavSection title="2. Optimization Flow" items={optimizationNavItems} isActive={isOptimizationActive} />
             <NavSection title="3. AI/ML Insights" items={aiMlNavItems} isActive={isAIMLActive} />
             <NavSection title="4. Unified Dashboard" items={dashboardNavItems} isActive={isDashboardActive} />
+            <NavSection title="5. Impact & Actions" items={impactActionsNavItems} isActive={isImpactActionsActive} />
             
             <div className="px-4 mt-6">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Management</h3>

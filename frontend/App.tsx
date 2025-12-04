@@ -23,6 +23,7 @@ import DemandOptimizationPage from './pages/DemandOptimizationPage';
 import SourceOptimizationPage from './pages/SourceOptimizationPage';
 import PostLoginWizardPage from './pages/PostLoginWizardPage';
 import PlanningWizardPage from './pages/PlanningWizardPage';
+import PlanningWizardPageEnhanced from './pages/PlanningWizardPageEnhanced';
 import OptimizationSetupPage from './pages/OptimizationSetupPage';
 import OptimizationResultsPage from './pages/OptimizationResultsPage';
 import PlanningAndOptimizationPage from './pages/PlanningAndOptimizationPage';
@@ -31,7 +32,6 @@ import OptimizationFlowPage from './pages/OptimizationFlowPage';
 import AIMLInsightsPage from './pages/AIMLInsightsPage';
 import UnifiedDashboardPage from './pages/UnifiedDashboardPage';
 import AIRecommendationsPage from './pages/AIRecommendationsPage';
-import RenewableOptimizationPage from './pages/RenewableOptimizationPage';
 import AIExplanationsPage from './pages/AIExplanationsPage';
 import EnergyForecastingPage from './pages/EnergyForecastingPage';
 import { AppContext } from './contexts/AppContext';
@@ -77,6 +77,7 @@ const App: React.FC = () => {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [suggestions, setSuggestions] = useState<RLSuggestion[]>([]);
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [socketConnected, setSocketConnected] = useState<boolean>(false);
 
   // Check wizard completion status
   useEffect(() => {
@@ -139,25 +140,27 @@ const App: React.FC = () => {
       const newSocket = io(socketUrl, {
         auth: { token },
         query: { siteId: selectedSite.id },
-      });
+    });
 
-      newSocket.on('connect', () => {
+    newSocket.on('connect', () => {
         console.log('✅ Socket.IO connected with ID:', newSocket.id);
+        setSocketConnected(true);
         // Subscribe to the selected site's updates
         if (selectedSite) {
-          newSocket.emit('subscribe_site', selectedSite.id);
+      newSocket.emit('subscribe_site', selectedSite.id);
           console.log(`📡 Subscribed to site: ${selectedSite.id}`);
         }
-      });
+    });
 
       newSocket.on('disconnect', (reason) => {
         console.log('❌ Socket.IO disconnected. Reason:', reason);
-      });
+        setSocketConnected(false);
+    });
 
-      newSocket.on('connect_error', (error) => {
+    newSocket.on('connect_error', (error) => {
         console.error('❌ Socket.IO connection error:', error.message);
         console.error('Socket URL:', socketUrl);
-      });
+    });
 
       // Listen for site data updates (initial connection only, not frequent updates)
       let lastSiteDataUpdate = 0;
@@ -172,13 +175,13 @@ const App: React.FC = () => {
         lastSiteDataUpdate = now;
         console.log('📊 Received initial site data:', data);
         // Convert to Telemetry format if needed
-        if (data.metrics) {
+      if (data.metrics) {
           const telemetry: Telemetry = {
             timestamp: data.timestamp || new Date().toISOString(),
             site_id: data.siteId || selectedSite?.id || '',
             device_id: 'system',
             subsystem: 'System',
-            metrics: {
+          metrics: {
               voltage: data.metrics.voltage?.value || 0,
               current: data.metrics.current?.value || 0,
               frequency: data.metrics.frequency?.value || 0,
@@ -186,9 +189,9 @@ const App: React.FC = () => {
               power_factor: data.metrics.power_factor?.value || 0.95,
               voltage_unbalance: data.metrics.voltage_unbalance?.value || 0,
               temp_c: data.metrics.temp_c?.value || 0,
-              pv_generation: data.metrics.pv_generation?.value || 0,
-              net_load: data.metrics.net_load?.value || 0,
-              battery_discharge: data.metrics.battery_discharge?.value || 0,
+            pv_generation: data.metrics.pv_generation?.value || 0,
+            net_load: data.metrics.net_load?.value || 0,
+            battery_discharge: data.metrics.battery_discharge?.value || 0,
               soc_batt: data.metrics.soc?.value || 0,
             }
           };
@@ -215,9 +218,9 @@ const App: React.FC = () => {
             device_id: 'system',
             subsystem: 'System',
             metrics: {
-              voltage: data.metrics.voltage?.value || 0,
-              current: data.metrics.current?.value || 0,
-              frequency: data.metrics.frequency?.value || 0,
+            voltage: data.metrics.voltage?.value || 0,
+            current: data.metrics.current?.value || 0,
+            frequency: data.metrics.frequency?.value || 0,
               thd: data.metrics.thd?.value || 0,
               power_factor: data.metrics.power_factor?.value || 0.95,
               voltage_unbalance: data.metrics.voltage_unbalance?.value || 0,
@@ -260,20 +263,21 @@ const App: React.FC = () => {
 
       newSocket.on('rl_suggestion', (data: RLSuggestion) => {
         setSuggestions(prev => [data, ...prev]);
-      });
+    });
 
-      setSocket(newSocket);
+    setSocket(newSocket);
 
-      return () => {
+    return () => {
+        setSocketConnected(false);
         newSocket.close();
-      };
+    };
     }
   }, [isAuthenticated, selectedSite]);
 
   const MIN_HEALTH_FETCH_INTERVAL = 20 * 60 * 1000; // 20 minutes minimum between fetches
 
   useEffect(() => {
-    if (isAuthenticated && selectedSite) {
+      if (isAuthenticated && selectedSite) {
       const STORAGE_KEY = `lastHealthStatusFetch_${selectedSite.id}`;
       let intervalId: NodeJS.Timeout | null = null;
       let isMounted = true;
@@ -298,7 +302,7 @@ const App: React.FC = () => {
           const status = await fetchHealthStatus(selectedSite.id);
           
           if (isMounted) {
-            setHealthStatus(status);
+          setHealthStatus(status);
           }
         } catch (error) {
           console.error('Failed to load health status:', error);
@@ -345,6 +349,31 @@ const App: React.FC = () => {
     }
   }, [isAuthenticated]);
 
+  // Load selected site from localStorage after sites are fetched
+  useEffect(() => {
+    if (sites.length > 0) {
+      const savedSiteId = localStorage.getItem('selectedSiteId');
+      if (savedSiteId && !selectedSite) {
+        // Find the site in the current sites list by ID
+        const matchingSite = sites.find(s => s.id === savedSiteId);
+        if (matchingSite) {
+          setSelectedSite(matchingSite);
+          console.log('✅ Restored selected site from localStorage:', matchingSite.name);
+        } else {
+          // Site no longer exists, clear from localStorage
+          localStorage.removeItem('selectedSiteId');
+          localStorage.removeItem('selectedSite');
+          console.log('⚠️ Previously selected site not found, cleared from storage');
+        }
+      } else if (!savedSiteId && sites.length > 0 && !selectedSite) {
+        // Auto-select the first site if none is selected
+        setSelectedSite(sites[0]);
+        localStorage.setItem('selectedSiteId', sites[0].id);
+        console.log('✅ Auto-selected first site:', sites[0].name);
+      }
+    }
+  }, [sites]);
+
   const login = (user: User, token: string) => {
     console.log('Login called with user:', user, 'token:', token ? 'present' : 'missing');
     if (!user || !token) {
@@ -365,8 +394,10 @@ const App: React.FC = () => {
     setCurrentUser(null);
     setSelectedSite(null);
     setHasCompletedWizard(null);
+    setSocketConnected(false);
     localStorage.removeItem('jwt');
     localStorage.removeItem('user');
+    localStorage.removeItem('selectedSiteId');
     localStorage.removeItem('selectedSite');
     localStorage.removeItem('hasCompletedWizard');
     if (socket) {
@@ -379,9 +410,13 @@ const App: React.FC = () => {
   const selectSite = (site: Site | null) => {
     setSelectedSite(site);
     if (site) {
+      localStorage.setItem('selectedSiteId', site.id);
       localStorage.setItem('selectedSite', JSON.stringify(site));
+      console.log('✅ Site selected and saved:', site.name);
     } else {
+      localStorage.removeItem('selectedSiteId');
       localStorage.removeItem('selectedSite');
+      console.log('✅ Site selection cleared');
     }
   };
 
@@ -430,7 +465,7 @@ const App: React.FC = () => {
     setTheme,
     rlStrategy,
     setRlStrategy,
-    connectionStatus: socket?.connected ? 'connected' : (isAuthenticated && selectedSite ? 'connecting' : 'disconnected'),
+    connectionStatus: socketConnected ? 'connected' : (isAuthenticated && selectedSite ? 'connecting' : 'disconnected'),
     logout,
   };
 
@@ -512,10 +547,11 @@ const App: React.FC = () => {
     return (
       <HashRouter>
         <LayoutWrapper>
-          <Routes>
+                <Routes>
             <Route path="/" element={<Navigate to="/main-options" />} />
             <Route path="/main-options" element={<MainOptionsPage />} />
-            <Route path="/planning-wizard" element={<PlanningWizardPage />} />
+            <Route path="/planning-wizard" element={<PlanningWizardPageEnhanced />} />
+            <Route path="/planning-wizard-old" element={<PlanningWizardPage />} />
             <Route path="/optimization-flow" element={<OptimizationFlowPage />} />
             <Route path="/optimization-setup" element={<OptimizationSetupPage />} />
             <Route path="/optimization-results" element={<OptimizationResultsPage />} />
@@ -524,23 +560,22 @@ const App: React.FC = () => {
             <Route path="/ai-ml-insights" element={<AIMLInsightsPage />} />
             <Route path="/energy-forecasting" element={<EnergyForecastingPage />} />
             <Route path="/ai-recommendations" element={<AIRecommendationsPage />} />
-            <Route path="/renewable-optimization" element={<RenewableOptimizationPage />} />
             <Route path="/ai-explanations" element={<AIExplanationsPage />} />
             <Route path="/unified-dashboard" element={<UnifiedDashboardPage />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/site-detail" element={<SiteDetailPage />} />
-            <Route path="/impact" element={<ImpactPage />} />
-            <Route path="/digital-twin" element={<DigitalTwinPage />} />
+                  <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/site-detail" element={<SiteDetailPage />} />
+                  <Route path="/impact" element={<ImpactPage />} />
+                  <Route path="/digital-twin" element={<DigitalTwinPage />} />
             <Route path="/planning-optimization" element={<PlanningAndOptimizationPage />} />
-            <Route path="/alerts" element={<AlertsPage />} />
-            <Route path="/maintenance" element={<MaintenancePage />} />
-            <Route path="/simulator" element={<SimulatorPage />} />
-            <Route path="/predictions" element={<PredictionsPage />} />
-            <Route path="/manage-sites" element={<ManageSitesPage />} />
-            <Route path="/manage-assets" element={<ManageAssetsPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
+                  <Route path="/alerts" element={<AlertsPage />} />
+                  <Route path="/maintenance" element={<MaintenancePage />} />
+                  <Route path="/simulator" element={<SimulatorPage />} />
+                  <Route path="/predictions" element={<PredictionsPage />} />
+                  <Route path="/manage-sites" element={<ManageSitesPage />} />
+                  <Route path="/manage-assets" element={<ManageAssetsPage />} />
+                  <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Routes>
         </LayoutWrapper>
       </HashRouter>
     );

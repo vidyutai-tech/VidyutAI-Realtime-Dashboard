@@ -363,8 +363,8 @@ const DemandOptimizationPage = () => {
     return [
       {
         title: "Total Optimized Cost",
-        value: formatCurrency(summary.Costs?.TOTAL_COST_INR),
-        subtext: costPerKwh ? `${formatCurrency(costPerKwh)} per kWh` : "Includes grid, diesel & storage costs",
+        value: summary.Costs?.TOTAL_COST_INR != null ? `₹${formatNumber(summary.Costs.TOTAL_COST_INR, 0)}` : "-",
+        subtext: costPerKwh ? `₹${formatNumber(costPerKwh, 2)} per kWh` : "Includes grid, diesel & storage costs",
         accent: "from-emerald-500 via-emerald-500 to-emerald-600",
         icon: DollarSign,
       },
@@ -377,22 +377,22 @@ const DemandOptimizationPage = () => {
       },
       {
         title: "Load Curtailed",
-        value: formatKWh(totalCurtailed),
-        subtext: `${formatPercent(curtailmentPercent)} of total demand`,
+        value: formatKWh(totalCurtailed, 0),
+        subtext: `${formatPercent(curtailmentPercent, 1)} of total demand`,
         accent: "from-red-500 to-pink-500",
         icon: AlertCircle,
       },
       {
         title: "Grid Imports",
-        value: formatKWh(summary.Grid?.Import_kWh),
-        subtext: summary.Grid?.Energy_Cost_INR != null ? `${formatCurrency(summary.Grid?.Energy_Cost_INR)}` : "Includes peak tariff impact",
+        value: formatKWh(summary.Grid?.Import_kWh, 0),
+        subtext: summary.Grid?.Energy_Cost_INR != null ? `₹${formatNumber(summary.Grid.Energy_Cost_INR, 0)}` : "Includes peak tariff impact",
         accent: "from-sky-500 to-blue-500",
         icon: Gauge,
       },
       {
         title: "Battery Cycling",
-        value: `${formatKWh(summary.Battery?.Charged_kWh)} / ${formatKWh(summary.Battery?.Discharged_kWh)}`,
-        subtext: `${formatNumber(summary.Battery?.Capacity_kWh)} kWh • ${formatNumber(summary.Battery?.Voltage_V, 0)} V`,
+        value: `${formatKWh(summary.Battery?.Charged_kWh, 0)} / ${formatKWh(summary.Battery?.Discharged_kWh, 0)}`,
+        subtext: `${formatNumber(summary.Battery?.Capacity_kWh, 0)} kWh • ${formatNumber(summary.Battery?.Voltage_V, 0)} V`,
         accent: "from-violet-500 to-purple-500",
         icon: BatteryCharging,
       },
@@ -717,26 +717,29 @@ const DemandOptimizationPage = () => {
                   </p>
                 </div>
               </div>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-                {keyMetrics.map((metric) => (
-                  <div
-                    key={metric.title}
-                    className={`rounded-2xl bg-gradient-to-br ${metric.accent} p-5 shadow-lg ring-1 ring-white/20`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-white/70">
-                          {metric.title}
-                        </p>
-                        <p className="mt-3 text-2xl font-semibold text-white md:text-3xl">
-                          {metric.value}
-                        </p>
-                        <p className="mt-2 text-sm text-white/80">{metric.subtext}</p>
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                {keyMetrics.map((metric) => {
+                  const IconComponent = metric.icon;
+                  return (
+                    <div
+                      key={metric.title}
+                      className={`rounded-2xl bg-gradient-to-br ${metric.accent} p-5 shadow-lg ring-1 ring-white/20 overflow-hidden`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-white/70">
+                            {metric.title}
+                          </p>
+                          <p className="mt-3 text-2xl font-semibold text-white md:text-3xl leading-tight">
+                            {metric.value}
+                          </p>
+                          <p className="mt-2 text-sm text-white/80 break-words">{metric.subtext}</p>
+                        </div>
+                        <IconComponent className="h-8 w-8 shrink-0 text-white/85 flex-shrink-0" />
                       </div>
-                      <metric.icon className="h-8 w-8 shrink-0 text-white/85" />
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -778,7 +781,7 @@ const DemandOptimizationPage = () => {
                       {response.summary.Resolution_min}-minute resolution.
                     </p>
                     <p className="mt-2">
-                      Cost per kWh served: ₹
+                      Cost of energy: ₹
                       {response.summary.Costs?.Cost_per_kWh_INR}
                     </p>
                     {response.summary.Costs?.Curtailment_Cost_INR > 0 && (

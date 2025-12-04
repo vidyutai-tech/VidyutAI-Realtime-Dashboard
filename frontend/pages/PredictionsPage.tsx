@@ -1,419 +1,572 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Battery, Zap, AlertTriangle, Loader, TrendingDown, Activity } from 'lucide-react';
 import Card from '../components/ui/Card';
-import { Battery, Loader, AlertTriangle } from 'lucide-react';
-import { getBatteryRULDashboard } from '../services/api';
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Area, AreaChart, ReferenceLine } from 'recharts';
-import { AppContext } from '../contexts/AppContext';
+import ActionableInsights from '../components/shared/ActionableInsights';
+import { getBatteryRULDashboard, getSolarDegradationDashboard, getEnergyLossDashboard } from '../services/api';
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+type PredictionType = 'battery' | 'solar' | 'loss';
 
 const PredictionsPage: React.FC = () => {
-    const { theme } = useContext(AppContext)!;
-    const gridColor = theme === 'dark' ? '#374151' : '#e5e7eb';
-    const textColor = theme === 'dark' ? '#9ca3af' : '#6b7281';
-    const bgColor = theme === 'dark' ? '#1f2937' : '#ffffff';
+  const navigate = useNavigate();
+  const [selectedType, setSelectedType] = useState<PredictionType>('battery');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>('');
+  
+  // Prediction horizon controls
+  const [batteryCycles, setBatteryCycles] = useState(50); // Number of samples
+  const [solarYears, setSolarYears] = useState(26); // 0-25 years
+  const [lossLoadPoints, setLossLoadPoints] = useState(30); // Number of load points
+  
+  // Data states
+  const [batteryData, setBatteryData] = useState<any>(null);
+  const [solarData, setSolarData] = useState<any>(null);
+  const [lossData, setLossData] = useState<any>(null);
 
-    // State for Battery RUL Model
-    const [batteryRULData, setBatteryRULData] = useState<{
-        predictions: Array<{ timestamp: string; prediction: number; ci_lower: number; ci_upper: number; actual?: number }>;
-        summary: { test_mae: number; test_rmse: number; test_r2: number };
-    } | null>(null);
-    const [isBatteryRULLoading, setIsBatteryRULLoading] = useState(false);
-    const [batteryRULError, setBatteryRULError] = useState(false);
+  // Load data on mount
+  useEffect(() => {
+    loadAllData();
+  }, []);
 
-    // Auto-load on mount
-    useEffect(() => {
-        handleBatteryRUL();
-    }, []);
-
-    const handleBatteryRUL = async () => {
-        setIsBatteryRULLoading(true);
-        setBatteryRULData(null);
-        setBatteryRULError(false);
-        try {
-            const result = await getBatteryRULDashboard();
-            setBatteryRULData({
-                predictions: result.predictions,
-                summary: result.summary
-            });
-        } catch (e) { 
-            setBatteryRULError(true); 
-        }
-        finally { setIsBatteryRULLoading(false); }
-    };
-
-    // Prepare chart data with historical (actual) and future (predicted) sections
-    const prepareChartData = () => {
-        if (!batteryRULData) return [];
-
-        const predictions = batteryRULData.predictions;
-        const data: Array<{
-            index: number;
-            timestamp: string;
-            health: number | null;
-            predicted: number | null;
-            ci_lower: number | null;
-            ci_upper: number | null;
-            isHistorical: boolean;
-            isPresent: boolean;
-        }> = [];
-
-        // Find the present point (where we transition from historical to predicted)
-        const presentIndex = Math.floor(predictions.length * 0.7); // 70% historical, 30% future
-        
-        // Add historical data (State of Health)
-        for (let i = 0; i < presentIndex; i++) {
-            const pred = predictions[i];
-            data.push({
-                index: i,
-                timestamp: new Date(pred.timestamp).toLocaleString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric', 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                }),
-                health: pred.actual ?? pred.prediction, // Use actual if available, else prediction
-                predicted: null,
-                ci_lower: null,
-                ci_upper: null,
-                isHistorical: true,
-                isPresent: false
-            });
-        }
-
-        // Add present marker
-        const presentPred = predictions[presentIndex];
-        data.push({
-            index: presentIndex,
-            timestamp: 'Present',
-            health: presentPred.actual ?? presentPred.prediction,
-            predicted: presentPred.prediction,
-            ci_lower: presentPred.ci_lower,
-            ci_upper: presentPred.ci_upper,
-            isHistorical: false,
-            isPresent: true
-        });
-
-        // Add future predictions (Remaining Useful Life)
-        for (let i = presentIndex + 1; i < predictions.length; i++) {
-            const pred = predictions[i];
-            data.push({
-                index: i,
-                timestamp: new Date(pred.timestamp).toLocaleString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric', 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                }),
-                health: null,
-                predicted: pred.prediction,
-                ci_lower: pred.ci_lower,
-                ci_upper: pred.ci_upper,
-                isHistorical: false,
-                isPresent: false
-            });
-        }
-
-        return data;
-    };
-
-    const chartData = prepareChartData();
+  const loadAllData = async () => {
+    setLoading(true);
+    setError('');
     
-    // Calculate max health for Beginning of Life line
-    const maxHealth = chartData.length > 0 
-        ? Math.max(...chartData.map(d => d.health ?? d.predicted ?? 0).filter(v => v > 0))
-        : 100;
-    
-    // Calculate min health for End of Life line (typically 0 or threshold)
-    const minHealth = 0;
-    const endOfLifeThreshold = maxHealth * 0.2; // 20% of max as EOL threshold
+    try {
+      const [battery, solar, loss] = await Promise.all([
+        getBatteryRULDashboard().catch(e => ({ error: e.message })),
+        getSolarDegradationDashboard().catch(e => ({ error: e.message })),
+        getEnergyLossDashboard().catch(e => ({ error: e.message }))
+      ]);
+      
+      if (!battery.error) setBatteryData(battery);
+      if (!solar.error) setSolarData(solar);
+      if (!loss.error) setLossData(loss);
+      
+      if (battery.error && solar.error && loss.error) {
+        setError('Failed to load prediction models. Please ensure models are trained.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load predictions');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4 md:p-6 lg:p-8">
-            <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                        Battery Remaining Useful Life (RUL) Prediction
-                    </h1>
-                    <p className="text-gray-600 dark:text-gray-400">
-                        State of Health Estimation and Remaining Useful Life Prediction using Machine Learning
-                    </p>
-                </div>
+  const formatNumber = (num: number, decimals = 2) => {
+    return num.toLocaleString('en-IN', { maximumFractionDigits: decimals });
+  };
 
-                {/* Main Chart Card */}
-                <Card className="mb-6">
-                    <div className="p-6">
-                        {isBatteryRULLoading && (
-                            <div className="flex items-center justify-center h-96">
-                                <Loader className="w-8 h-8 animate-spin text-green-500" />
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white dark:bg-gray-800 p-3 border border-gray-200 dark:border-gray-700 rounded shadow-lg">
+          <p className="font-semibold text-gray-900 dark:text-white">{label}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} style={{ color: entry.color }} className="text-sm">
+              {entry.name}: {formatNumber(entry.value)}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const PredictionCard = ({
+    type,
+    icon: Icon,
+    title,
+    description,
+    color,
+    available
+  }: {
+    type: PredictionType;
+    icon: React.ElementType;
+    title: string;
+    description: string;
+    color: string;
+    available: boolean;
+  }) => (
+    <Card 
+      className={`cursor-pointer transition-all duration-300 ${
+        selectedType === type 
+          ? `border-2 ${color} shadow-lg` 
+          : 'border-2 border-gray-200 dark:border-gray-700 hover:shadow-md'
+      } ${!available ? 'opacity-50' : ''}`}
+      onClick={() => available && setSelectedType(type)}
+    >
+      <div className="p-6">
+        <div className="flex items-center space-x-4">
+          <div className={`p-4 rounded-lg ${color.replace('border-', 'bg-').replace('600', '100')} dark:${color.replace('border-', 'bg-').replace('600', '900/30')}`}>
+            <Icon className={`w-8 h-8 ${color.replace('border-', 'text-')}`} />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-bold text-lg text-gray-900 dark:text-white mb-1">
+              {title}
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {description}
+            </p>
+          </div>
+          {selectedType === type && (
+            <div className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full">
+              <Activity className="w-5 h-5" />
+            </div>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
+
+  return (
+    <div className="min-h-full bg-gradient-to-br from-purple-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 -m-4 md:-m-6 lg:-m-8 p-4 md:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-6">
+          <button
+            onClick={() => navigate('/ai-ml-insights')}
+            className="flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-4"
+          >
+            <ArrowLeft className="w-5 h-5 mr-2" />
+            Back to AI/ML Insights
+          </button>
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+            AI Predictions
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 text-lg">
+            Advanced ML models for predictive analytics and diagnostics
+          </p>
+        </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <p className="text-red-800 dark:text-red-300">{error}</p>
+          </div>
+        )}
+
+        {loading && (
+          <div className="flex justify-center items-center py-12">
+            <Loader className="w-12 h-12 animate-spin text-blue-600" />
+          </div>
+        )}
+
+        {!loading && (
+          <>
+            {/* Model Selection Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <PredictionCard
+                type="battery"
+                icon={Battery}
+                title="Battery RUL"
+                description="Remaining Useful Life prediction"
+                color="border-blue-600"
+                available={!!batteryData}
+              />
+              <PredictionCard
+                type="solar"
+                icon={Zap}
+                title="Solar Degradation"
+                description="Panel performance over time"
+                color="border-amber-600"
+                available={!!solarData}
+              />
+              <PredictionCard
+                type="loss"
+                icon={AlertTriangle}
+                title="Energy Loss"
+                description="Distribution system losses"
+                color="border-red-600"
+                available={!!lossData}
+              />
+            </div>
+
+            {/* Battery RUL Visualization */}
+            {selectedType === 'battery' && batteryData && (
+              <div className="space-y-6">
+                <Card>
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex-1">
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                          Battery Remaining Useful Life Prediction
+                        </h2>
+                        <p className="text-gray-600 dark:text-gray-400">
+                          Predicting battery health degradation over usage cycles
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            Data Points
+                          </label>
+                          <select
+                            value={batteryCycles}
+                            onChange={(e) => setBatteryCycles(parseInt(e.target.value))}
+                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          >
+                            <option value={20}>20 points</option>
+                            <option value={50}>50 points</option>
+                            <option value={100}>100 points</option>
+                          </select>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Model Accuracy</p>
+                          <p className="text-2xl font-bold text-green-600">
+                            R² = {(batteryData.model_info.r2 * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                        )}
 
-                        {batteryRULError && (
-                            <div className="flex flex-col items-center justify-center h-96 text-red-500">
-                                <AlertTriangle className="w-12 h-12 mb-4" />
-                                <p className="text-lg font-semibold">Failed to load Battery RUL data</p>
-                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                                    Please ensure the model is trained by running train_battery_rul.py
-                                </p>
-                                <button 
-                                    onClick={handleBatteryRUL}
-                                    className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-semibold"
-                                >
-                                    Retry
-                    </button>
-                            </div>
-                        )}
-
-                        {batteryRULData && chartData.length > 0 && (
-                            <div>
-                                {/* Chart Legend */}
-                                <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-4 h-0.5 bg-black dark:bg-white"></div>
-                                            <span className="text-sm text-gray-700 dark:text-gray-300">State of Health (Historical)</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-4 h-0.5 border-dashed border-2 border-blue-600"></div>
-                                            <span className="text-sm text-gray-700 dark:text-gray-300">Remaining Useful Life (Predicted)</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-4 h-2 bg-blue-200 dark:bg-blue-900/30"></div>
-                                            <span className="text-sm text-gray-700 dark:text-gray-300">Confidence Interval</span>
-                                        </div>
-                                    </div>
-                                    {batteryRULData.summary && (
-                                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                                            <span className="font-semibold">Model Performance: </span>
-                                            R² = {(batteryRULData.summary.test_r2 * 100).toFixed(1)}% | 
-                                            MAE = {batteryRULData.summary.test_mae.toFixed(2)}h | 
-                                            RMSE = {batteryRULData.summary.test_rmse.toFixed(2)}h
-                                        </div>
-                                    )}
+                    <div className="h-96">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={batteryData.predictions.slice(0, batteryCycles)}>
+                          <defs>
+                            <linearGradient id="colorRUL" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis 
+                            dataKey="cycle_count" 
+                            label={{ value: 'Charge/Discharge Cycles', position: 'insideBottom', offset: -5 }}
+                            tick={{ fontSize: 12 }}
+                          />
+                          <YAxis 
+                            label={{ value: 'RUL (hours)', angle: -90, position: 'insideLeft' }}
+                            tick={{ fontSize: 12 }}
+                          />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Legend />
+                          <Area 
+                            type="monotone" 
+                            dataKey="rul_hours" 
+                            name="Remaining Useful Life"
+                            stroke="#3b82f6" 
+                            strokeWidth={2}
+                            fill="url(#colorRUL)"
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
                     </div>
 
-                                {/* Chart with two sections */}
-                                <div className="relative border-2 border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden bg-white dark:bg-gray-800">
-                                    {/* Historical Section Background (White) */}
-                                    {(() => {
-                                        const presentIdx = chartData.findIndex(d => d.isPresent);
-                                        const historicalPercent = presentIdx > 0 ? (presentIdx / chartData.length) * 100 : 70;
-                                        return (
-                                            <div 
-                                                className="absolute left-0 top-0 bottom-0 bg-white dark:bg-gray-800 z-0"
-                                                style={{ width: `${historicalPercent}%` }}
-                                            />
-                                        );
-                                    })()}
-                                    {/* Future Section Background (Blue Gradient) */}
-                                    {(() => {
-                                        const presentIdx = chartData.findIndex(d => d.isPresent);
-                                        const historicalPercent = presentIdx > 0 ? (presentIdx / chartData.length) * 100 : 70;
-                                        const futurePercent = 100 - historicalPercent;
-                                        return (
-                                            <div 
-                                                className="absolute right-0 top-0 bottom-0 bg-gradient-to-r from-blue-50 via-blue-100 to-blue-200 dark:from-blue-900/20 dark:via-blue-800/30 dark:to-blue-700/40 z-0"
-                                                style={{ 
-                                                    width: `${futurePercent}%`,
-                                                    left: `${historicalPercent}%`
-                                                }}
-                                            />
-                                        );
-                                    })()}
-                                    <div className="relative z-10">
-                                        <ResponsiveContainer width="100%" height={500}>
-                                            <AreaChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-                                            <defs>
-                                                <linearGradient id="colorHistorical" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#1f2937" stopOpacity={0.1}/>
-                                                    <stop offset="95%" stopColor="#1f2937" stopOpacity={0}/>
-                                                </linearGradient>
-                                                <linearGradient id="colorPredicted" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/>
-                                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                                                </linearGradient>
-                                            </defs>
-                                            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                                            
-                                            {/* X Axis */}
-                                        <XAxis 
-                                                dataKey="timestamp" 
-                                          stroke={textColor} 
-                                                tick={{ fontSize: 11 }}
-                                                interval={Math.max(1, Math.floor(chartData.length / 12))}
-                                                label={{ value: 'Time', position: 'insideBottom', offset: -10, fill: textColor, fontSize: 12 }}
-                                        />
-                                            
-                                            {/* Y Axis */}
-                                        <YAxis 
-                                          stroke={textColor} 
-                                                tick={{ fontSize: 11 }}
-                                                label={{ value: 'Health / RUL (Hours)', angle: -90, position: 'insideLeft', fill: textColor, fontSize: 12 }}
-                                                domain={[minHealth, maxHealth * 1.1]}
-                                            />
-                                            
-                                        <Tooltip 
-                                                contentStyle={{ 
-                                                    backgroundColor: bgColor, 
-                                                    border: `1px solid ${gridColor}`,
-                                                    borderRadius: '8px'
-                                                }}
-                                                formatter={(value: any, name: string) => {
-                                                    if (name === 'health') return [`${Number(value).toFixed(2)}h`, 'State of Health'];
-                                                    if (name === 'predicted') return [`${Number(value).toFixed(2)}h`, 'Predicted RUL'];
-                                                    return [value, name];
-                                                }}
-                                            />
-
-                                            {/* Beginning of Life Reference Line */}
-                                            <ReferenceLine 
-                                                y={maxHealth} 
-                                                stroke="#10b981" 
-                                                strokeDasharray="5 5" 
-                                                strokeWidth={2}
-                                                label={{ value: "Beginning of Life", position: "topRight", fill: textColor, fontSize: 10 }}
-                                            />
-
-                                            {/* End of Life Reference Line */}
-                                            <ReferenceLine 
-                                                y={endOfLifeThreshold} 
-                                                stroke="#ef4444" 
-                                                strokeDasharray="5 5" 
-                                                strokeWidth={2}
-                                                label={{ value: "End of Life", position: "bottomRight", fill: textColor, fontSize: 10 }}
-                                            />
-
-                                            {/* Present Marker - Vertical Line */}
-                                            {chartData.find(d => d.isPresent) && (
-                                                <ReferenceLine 
-                                                    x={chartData.findIndex(d => d.isPresent)} 
-                                                    stroke="#f59e0b" 
-                                                    strokeWidth={2}
-                                                    label={{ value: "Present", position: "top", fill: "#f59e0b", fontSize: 11, fontWeight: 'bold' }}
-                                                />
-                                            )}
-
-                                            {/* Confidence Interval Area (Future predictions only) */}
-                                            <Area
-                                                type="monotone"
-                                                dataKey="ci_upper"
-                                                stroke="none"
-                                                fill="url(#colorPredicted)"
-                                                fillOpacity={0.15}
-                                                connectNulls={false}
-                                            />
-                                            <Area
-                                                type="monotone"
-                                                dataKey="ci_lower"
-                                                stroke="none"
-                                                fill={bgColor}
-                                                fillOpacity={1}
-                                                connectNulls={false}
-                                            />
-
-                                            {/* Historical State of Health Line (Solid) */}
-                                            <Line
-                                                type="monotone"
-                                                dataKey="health"
-                                                stroke="#000000"
-                                                strokeWidth={3}
-                                                dot={false}
-                                                connectNulls={false}
-                                                name="State of Health"
-                                            />
-
-                                            {/* Predicted RUL Line (Dashed) */}
-                                            <Line
-                                                type="monotone"
-                                                dataKey="predicted"
-                                                stroke="#3b82f6"
-                                                strokeWidth={2.5}
-                                                strokeDasharray="8 4"
-                                                dot={false}
-                                                connectNulls={false}
-                                                name="Remaining Useful Life"
-                                            />
-
-                                            {/* End of Life Intersection Point */}
-                                            {(() => {
-                                                const eolPoint = chartData.find((d, idx) => {
-                                                    if (!d.predicted) return false;
-                                                    const next = chartData[idx + 1];
-                                                    return d.predicted > endOfLifeThreshold && 
-                                                           next && next.predicted <= endOfLifeThreshold;
-                                                });
-                                                if (eolPoint) {
-                                                    const eolIndex = chartData.indexOf(eolPoint);
-                                                    return (
-                                                        <ReferenceLine 
-                                                            x={eolIndex} 
-                                                            y={endOfLifeThreshold} 
-                                                            stroke="#ef4444" 
-                                                            strokeWidth={3}
-                                                            shape={<circle r={5} fill="#ef4444" />}
-                                                        />
-                                                    );
-                                                }
-                                                return null;
-                                            })()}
-                                        </AreaChart>
-                                </ResponsiveContainer>
-                                    </div>
-
-                                    {/* Section Labels */}
-                                    <div className="absolute top-4 left-4 bg-white/90 dark:bg-gray-800/90 px-3 py-1.5 rounded-md border border-gray-200 dark:border-gray-700 shadow-sm">
-                                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Post → State of Health Estimation</span>
-                                    </div>
-                                    <div className="absolute top-4 right-4 bg-blue-100/90 dark:bg-blue-900/40 px-3 py-1.5 rounded-md border border-blue-300 dark:border-blue-700 shadow-sm">
-                                        <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">Future → Remaining Useful Life Prediction</span>
-                                    </div>
-                                    {/* Time Labels at bottom */}
-                                    <div className="absolute bottom-2 left-4 text-xs text-gray-500 dark:text-gray-400 font-medium">
-                                        Post
-                                    </div>
-                                    <div className="absolute bottom-2 right-4 text-xs text-gray-500 dark:text-gray-400 font-medium">
-                                        Future
-                                    </div>
-                                </div>
-                                </div>
-                            )}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Model Type</p>
+                        <p className="text-lg font-bold text-gray-900 dark:text-white">Random Forest</p>
+                      </div>
+                      <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Mean Error</p>
+                        <p className="text-lg font-bold text-gray-900 dark:text-white">
+                          ±{formatNumber(batteryData.model_info.mae)} hours
+                        </p>
+                      </div>
+                      <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Training Samples</p>
+                        <p className="text-lg font-bold text-gray-900 dark:text-white">5,000</p>
+                      </div>
                     </div>
+                  </div>
                 </Card>
 
-                {/* Model Info Card */}
-                {batteryRULData && (
-                    <Card>
-                        <div className="p-6">
-                            <div className="flex items-center mb-4">
-                                <Battery className="w-6 h-6 mr-3 text-green-500"/>
-                                <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                                    Model Information
-                                </h3>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Model Type</h4>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">RandomForest Regressor</p>
-                                </div>
-                                <div>
-                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Features</h4>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">69 engineered features (rolling stats, battery metrics)</p>
-                                </div>
-                                <div>
-                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Training Data</h4>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">Synthetic dataset with hourly timeseries</p>
-                                </div>
-                                <div>
-                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Output</h4>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400">RUL in hours with 95% confidence intervals</p>
-                                </div>
-                            </div>
+                <Card>
+                  <div className="p-6">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                      Key Insights
+                    </h3>
+                    <div className="space-y-3 text-gray-700 dark:text-gray-300">
+                      <p>• Battery RUL decreases with usage cycles, temperature exposure, and age</p>
+                      <p>• Maintaining optimal temperature (20-30°C) extends battery life significantly</p>
+                      <p>• High discharge rates accelerate degradation</p>
+                      <p>• Regular monitoring helps predict replacement needs and prevent failures</p>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* Solar Degradation Visualization */}
+            {selectedType === 'solar' && solarData && (
+              <div className="space-y-6">
+                <Card>
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex-1">
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                          Solar Panel Degradation Analysis
+                        </h2>
+                        <p className="text-gray-600 dark:text-gray-400">
+                          Performance decline prediction over panel lifetime
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            Forecast Horizon
+                          </label>
+                          <select
+                            value={solarYears}
+                            onChange={(e) => setSolarYears(parseInt(e.target.value))}
+                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          >
+                            <option value={6}>5 years</option>
+                            <option value={11}>10 years</option>
+                            <option value={16}>15 years</option>
+                            <option value={21}>20 years</option>
+                            <option value={26}>25 years</option>
+                          </select>
                         </div>
-                    </Card>
-                )}
-            </div>
-        </div>
-    );
+                        <div className="text-right">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Model Accuracy</p>
+                          <p className="text-2xl font-bold text-amber-600">
+                            R² = {(solarData.model_info.r2 * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="h-96">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={solarData.predictions.slice(0, solarYears)}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis 
+                            dataKey="age_years" 
+                            label={{ value: 'Panel Age (years)', position: 'insideBottom', offset: -5 }}
+                            tick={{ fontSize: 12 }}
+                          />
+                          <YAxis 
+                            yAxisId="left"
+                            label={{ value: 'Efficiency (%)', angle: -90, position: 'insideLeft' }}
+                            tick={{ fontSize: 12 }}
+                            domain={[0, 20]}
+                          />
+                          <YAxis 
+                            yAxisId="right"
+                            orientation="right"
+                            label={{ value: 'Degradation (%)', angle: 90, position: 'insideRight' }}
+                            tick={{ fontSize: 12 }}
+                          />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Legend />
+                          <Line 
+                            yAxisId="left"
+                            type="monotone" 
+                            dataKey="efficiency_current" 
+                            name="Current Efficiency"
+                            stroke="#10b981" 
+                            strokeWidth={3}
+                            dot={false}
+                          />
+                          <Line 
+                            yAxisId="right"
+                            type="monotone" 
+                            dataKey="degradation_percent" 
+                            name="Degradation %"
+                            stroke="#f59e0b" 
+                            strokeWidth={2}
+                            strokeDasharray="5 5"
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                      <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Model Type</p>
+                        <p className="text-lg font-bold text-gray-900 dark:text-white">Gradient Boosting</p>
+                      </div>
+                      <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Mean Error</p>
+                        <p className="text-lg font-bold text-gray-900 dark:text-white">
+                          ±{formatNumber(solarData.model_info.mae)}%
+                        </p>
+                      </div>
+                      <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Expected Degradation</p>
+                        <p className="text-lg font-bold text-gray-900 dark:text-white">0.5-0.8% / year</p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card>
+                  <div className="p-6">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                      Key Insights
+                    </h3>
+                    <div className="space-y-3 text-gray-700 dark:text-gray-300">
+                      <p>• Solar panels typically degrade 0.5-0.8% annually</p>
+                      <p>• Dust accumulation can reduce efficiency by up to 15%</p>
+                      <p>• High temperatures accelerate performance decline</p>
+                      <p>• Regular cleaning and maintenance optimize long-term performance</p>
+                      <p>• Expected lifetime: 25-30 years with 80% efficiency retention</p>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* Energy Loss Visualization */}
+            {selectedType === 'loss' && lossData && (
+              <div className="space-y-6">
+                <Card>
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex-1">
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                          Energy Loss Analysis
+                        </h2>
+                        <p className="text-gray-600 dark:text-gray-400">
+                          Distribution system losses across varying load conditions
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                            Load Range
+                          </label>
+                          <select
+                            value={lossLoadPoints}
+                            onChange={(e) => setLossLoadPoints(parseInt(e.target.value))}
+                            className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                          >
+                            <option value={15}>50-250 kW</option>
+                            <option value={30}>50-500 kW</option>
+                            <option value={50}>50-800 kW</option>
+                          </select>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Model Accuracy</p>
+                          <p className="text-2xl font-bold text-red-600">
+                            R² = {(lossData.model_info.r2 * 100).toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="h-96">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={lossData.predictions.slice(0, lossLoadPoints)}>
+                          <defs>
+                            <linearGradient id="colorLoss" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                            </linearGradient>
+                            <linearGradient id="colorEfficiency" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis 
+                            dataKey="load_kw" 
+                            label={{ value: 'Load (kW)', position: 'insideBottom', offset: -5 }}
+                            tick={{ fontSize: 12 }}
+                          />
+                          <YAxis 
+                            label={{ value: 'Percentage (%)', angle: -90, position: 'insideLeft' }}
+                            tick={{ fontSize: 12 }}
+                          />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Legend />
+                          <Area 
+                            type="monotone" 
+                            dataKey="loss_percent" 
+                            name="Loss %"
+                            stroke="#ef4444" 
+                            strokeWidth={2}
+                            fill="url(#colorLoss)"
+                          />
+                          <Area 
+                            type="monotone" 
+                            dataKey="efficiency_percent" 
+                            name="Efficiency %"
+                            stroke="#10b981" 
+                            strokeWidth={2}
+                            fill="url(#colorEfficiency)"
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+                      <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Model Type</p>
+                        <p className="text-lg font-bold text-gray-900 dark:text-white">Gradient Boosting</p>
+                      </div>
+                      <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Mean Error</p>
+                        <p className="text-lg font-bold text-gray-900 dark:text-white">
+                          ±{formatNumber(lossData.model_info.mae)}%
+                        </p>
+                      </div>
+                      <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Typical Loss Range</p>
+                        <p className="text-lg font-bold text-gray-900 dark:text-white">2-8%</p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card>
+                  <div className="p-6">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                      Key Insights
+                    </h3>
+                    <div className="space-y-3 text-gray-700 dark:text-gray-300">
+                      <p>• Energy losses increase with cable length and load current</p>
+                      <p>• Poor power factor leads to higher reactive power losses</p>
+                      <p>• Transformer overloading significantly increases losses</p>
+                      <p>• Voltage deviations from nominal reduce system efficiency</p>
+                      <p>• Optimal loading: 50-75% of transformer capacity</p>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* Info Card */}
+            <Card className="mt-8">
+              <div className="p-6 bg-blue-50 dark:bg-blue-900/20">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">
+                  About These Predictions
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-gray-700 dark:text-gray-300">
+                  <div>
+                    <h4 className="font-semibold mb-2">Battery RUL</h4>
+                    <p>Uses Random Forest algorithm to predict remaining battery life based on usage patterns, temperature, and aging factors.</p>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-2">Solar Degradation</h4>
+                    <p>Gradient Boosting model forecasts panel performance decline due to environmental conditions and aging.</p>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-2">Energy Loss</h4>
+                    <p>Analyzes distribution losses from cables, transformers, and power quality issues for optimization.</p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            {/* Actionable Insights */}
+            <ActionableInsights 
+              context="predictions" 
+              predictionData={{
+                battery: batteryData,
+                solar: solarData,
+                loss: lossData
+              }}
+              compact={true}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default PredictionsPage;

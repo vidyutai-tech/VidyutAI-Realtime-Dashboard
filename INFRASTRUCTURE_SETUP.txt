@@ -1,0 +1,107 @@
+# VidyutAI Infrastructure Upgrade - Quick Start Guide
+
+## Current Status
+✅ All new infrastructure added WITHOUT breaking existing functionality!
+✅ System still works exactly as before (SQLite + 10-min intervals)
+✅ New services are OPTIONAL and disabled by default
+
+## What Was Added
+1. TimescaleDB - Production time-series database
+2. Redis - Fast caching layer
+3. MQTT - IoT messaging protocol
+4. Dual-mode operation - Both old and new systems work in parallel
+
+## Quick Start
+
+### Step 1: Start Infrastructure (Docker)
+```bash
+# Start TimescaleDB, Redis, MQTT
+docker-compose -f docker-compose.infrastructure.yml up -d
+
+# Check status
+docker-compose -f docker-compose.infrastructure.yml ps
+```
+
+### Step 2: Install Dependencies
+```bash
+cd backend
+npm install pg redis mqtt
+```
+
+### Step 3: Enable New Infrastructure (Optional)
+Edit backend/.env:
+```
+USE_TIMESCALE=true
+USE_REDIS=true
+USE_MQTT=true
+```
+
+### Step 4: Restart Backend
+```bash
+cd backend
+npm start
+```
+
+## How It Works
+
+### Default Mode (Current - No Changes)
+- USE_TIMESCALE=false
+- USE_REDIS=false
+- USE_MQTT=false
+→ Uses SQLite only (exactly as before)
+
+### Dual Mode (New - Both Systems)
+- USE_TIMESCALE=true
+- USE_REDIS=true
+- USE_MQTT=true
+→ Writes to BOTH SQLite AND TimescaleDB
+→ Caches in Redis
+→ Publishes to MQTT
+→ Everything still works!
+
+## Benefits
+✅ No risk - old system still works
+✅ Test new infrastructure in parallel
+✅ Production-ready when needed
+✅ Easy to enable/disable with env variables
+
+## Commands
+
+# Start infrastructure only
+docker-compose -f docker-compose.infrastructure.yml up -d
+
+# Stop infrastructure
+docker-compose -f docker-compose.infrastructure.yml down
+
+# View logs
+docker-compose -f docker-compose.infrastructure.yml logs -f
+
+# Check TimescaleDB
+docker exec -it vidyutai_timescaledb psql -U postgres -d vidyutai
+
+# Check Redis
+docker exec -it vidyutai_redis redis-cli ping
+
+# Test MQTT
+docker exec -it vidyutai_mosquitto mosquitto_sub -t 'vidyutai/#' -v
+
+## Verification
+
+After enabling (USE_*=true), check backend logs:
+✅ TimescaleDB connected
+✅ Redis connected  
+✅ MQTT connected
+📍 Dual-mode: SQLite=true | TimescaleDB=true | Redis=true | MQTT=true
+
+## Next Steps
+1. Start with infrastructure: docker-compose up
+2. Keep USE_*=false initially
+3. Test that everything still works
+4. Set USE_TIMESCALE=true, restart, verify
+5. Set USE_REDIS=true, restart, verify
+6. Set USE_MQTT=true, restart, verify
+7. Monitor logs for any errors
+
+## Rollback
+Just set USE_*=false and restart. Old SQLite system still works!
+

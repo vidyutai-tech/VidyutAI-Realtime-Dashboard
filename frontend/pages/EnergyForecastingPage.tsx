@@ -1,13 +1,15 @@
-import React, { useState, useContext, useMemo } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, TrendingUp, Sun, Zap, Activity, Loader, BarChart3, Sparkles } from 'lucide-react';
 import Card from '../components/ui/Card';
 import { AppContext } from '../contexts/AppContext';
+import ActionableInsights from '../components/shared/ActionableInsights';
 import { 
   forecastEnergy, 
   getForecastSummary, 
   explainForecast,
-  getAIServiceURL 
+  getAIServiceURL,
+  ForecastResponse
 } from '../services/api';
 import {
   ResponsiveContainer,
@@ -26,19 +28,58 @@ const EnergyForecastingPage: React.FC = () => {
   const navigate = useNavigate();
   const { selectedSite, theme } = useContext(AppContext)!;
   
-  const [selectedType, setSelectedType] = useState<'production' | 'consumption'>('consumption');
+  const [selectedType, setSelectedType] = useState<'production' | 'consumption'>('consumption'); // consumption = demand
   const [forecastHours, setForecastHours] = useState<number>(24);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
   
-  // Forecast data states
-  const [productionForecast, setProductionForecast] = useState<any>(null);
-  const [consumptionForecast, setConsumptionForecast] = useState<any>(null);
+  // Forecast data states - load from localStorage on mount
+  const [productionForecast, setProductionForecast] = useState<any>(() => {
+    const saved = localStorage.getItem('productionForecast');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [consumptionForecast, setConsumptionForecast] = useState<any>(() => {
+    const saved = localStorage.getItem('consumptionForecast');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [aiExplanation, setAiExplanation] = useState<string>('');
   const [explaining, setExplaining] = useState(false);
 
   const gridColor = theme === 'dark' ? '#374151' : '#e5e7eb';
   const textColor = theme === 'dark' ? '#9ca3af' : '#6b7281';
+
+  // Auto-load forecast on mount if not already loaded
+  useEffect(() => {
+    if (!consumptionForecast && !loading) {
+      handleForecast('consumption');
+    }
+  }, []);
+
+  // Save forecasts to localStorage when they change
+  useEffect(() => {
+    if (productionForecast) {
+      localStorage.setItem('productionForecast', JSON.stringify(productionForecast));
+    }
+  }, [productionForecast]);
+
+  useEffect(() => {
+    if (consumptionForecast) {
+      localStorage.setItem('consumptionForecast', JSON.stringify(consumptionForecast));
+    }
+  }, [consumptionForecast]);
+
+  // Auto-refresh forecast every 10 minutes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (selectedType === 'production' && productionForecast) {
+        handleForecast('production');
+      } else if (selectedType === 'consumption' && consumptionForecast) {
+        handleForecast('consumption');
+      }
+    }, 600000); // 10 minutes
+
+    return () => clearInterval(interval);
+  }, [selectedType, productionForecast, consumptionForecast]);
 
   const handleForecast = async (type: 'production' | 'consumption') => {
     setLoading(true);
@@ -88,14 +129,30 @@ const EnergyForecastingPage: React.FC = () => {
   const formatChartData = (forecast: any) => {
     if (!forecast || !forecast.data) return [];
     
-    return forecast.data.map((item: any, index: number) => ({
-      time: `${item.hour}:00`,
-      hour: item.hour,
-      value: item.value,
-      lower: item.confidence_lower || item.value * 0.9,
-      upper: item.confidence_upper || item.value * 1.1,
-      timestamp: item.timestamp
-    }));
+    return forecast.data.map((item: any, index: number) => {
+      // Parse timestamp or create from current date + hour offset
+      const timestamp = item.timestamp ? new Date(item.timestamp) : new Date(Date.now() + (item.hour * 3600000));
+      const displayTime = timestamp.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
+      });
+      const displayDate = timestamp.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric' 
+      });
+      
+      return {
+        time: displayTime,
+        date: displayDate,
+        fullLabel: `${displayDate} ${displayTime}`,
+        hour: item.hour,
+        value: item.value,
+        lower: item.confidence_lower || item.value * 0.9,
+        upper: item.confidence_upper || item.value * 1.1,
+        timestamp: timestamp.toISOString()
+      };
+    });
   };
 
   const formatNumber = (value: number | null | undefined): string => {
@@ -239,8 +296,8 @@ const EnergyForecastingPage: React.FC = () => {
               icon: "text-green-600 dark:text-green-400",
               button: "bg-green-600 hover:bg-green-700"
             }}
-            title="Energy Consumption"
-            description="Actual energy usage forecast"
+            title="Energy Demand"
+            description="Actual energy demand forecast"
           />
         </div>
 
@@ -286,7 +343,7 @@ const EnergyForecastingPage: React.FC = () => {
             
             {currentForecast && currentForecast.summary && (
               <div className="text-sm text-gray-600 dark:text-gray-400">
-                <p>Model: <span className="font-semibold">{currentForecast.model_info?.model || 'Statistical Pattern'}</span></p>
+                <p>Model: <span className="font-semibold">Time-Series Analysis</span></p>
                 {currentForecast.model_info?.r2 && (
                   <p>Accuracy: <span className="font-semibold">{(currentForecast.model_info.r2 * 100).toFixed(1)}%</span></p>
                 )}
@@ -325,10 +382,14 @@ const EnergyForecastingPage: React.FC = () => {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                     <XAxis 
-                      dataKey="time" 
+                      dataKey="fullLabel" 
                       stroke={textColor}
-                      tick={{ fontSize: 12 }}
+                      tick={{ fontSize: 10 }}
                       interval={Math.max(1, Math.floor(forecastHours / 12))}
+                      angle={-45}
+                      textAnchor="end"
+                      height={80}
+                      label={{ value: 'Date & Time', position: 'insideBottom', offset: -10, fill: textColor }}
                     />
                     <YAxis 
                       stroke={textColor}
@@ -420,56 +481,6 @@ const EnergyForecastingPage: React.FC = () => {
           </div>
         )}
 
-        {/* AI Explanation */}
-        {currentForecast && (
-          <Card>
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center">
-                  <Sparkles className="w-5 h-5 text-purple-500 mr-2" />
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    AI-Powered Insights
-                  </h3>
-                </div>
-                <button
-                  onClick={() => handleExplainForecast(currentForecast)}
-                  disabled={explaining}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center space-x-2"
-                >
-                  {explaining ? (
-                    <>
-                      <Loader className="w-4 h-4 animate-spin" />
-                      <span>Analyzing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>Get AI Explanation</span>
-                    </>
-                  )}
-                </button>
-              </div>
-              
-              {aiExplanation ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
-                    <div 
-                      className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap"
-                      dangerouslySetInnerHTML={{ 
-                        __html: aiExplanation.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br/>')
-                      }}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-400 dark:text-gray-500">
-                  <BarChart3 className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                  <p>Click "Get AI Explanation" to receive AI-powered insights about this forecast</p>
-                </div>
-              )}
-            </div>
-          </Card>
-        )}
 
         {/* Empty State */}
         {!currentForecast && !loading && (
@@ -485,6 +496,13 @@ const EnergyForecastingPage: React.FC = () => {
             </div>
           </Card>
         )}
+
+        {/* Actionable Insights */}
+        <ActionableInsights 
+          context="forecast" 
+          forecastData={currentForecast as ForecastResponse | null}
+          compact={true}
+        />
       </div>
     </div>
   );

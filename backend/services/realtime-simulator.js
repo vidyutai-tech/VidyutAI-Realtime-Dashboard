@@ -1,4 +1,7 @@
 const { getDatabase } = require('../database/db');
+const timescale = require('../database/timescale-client');
+const redis = require('../database/redis-client');
+const mqtt = require('./mqtt-client');
 
 /**
  * Real-time Data Simulator
@@ -59,7 +62,7 @@ class RealtimeSimulator {
   /**
    * Generate and insert timeseries data for all sites
    */
-  generateData() {
+  async generateData() {
     const now = new Date();
     const timeMultipliers = this.getTimeOfDayMultiplier();
     
@@ -106,6 +109,73 @@ class RealtimeSimulator {
     });
 
     insertMany();
+    
+    // Write to new infrastructure if enabled (parallel operation)
+    await this.writeToNewInfrastructure(sites, now, timeMultipliers);
+  }
+
+  async writeToNewInfrastructure(sites, now, timeMultipliers) {
+    for (const site of sites) {
+      const siteId = site.id;
+      const pattern = this.patterns[siteId] || this.patterns['site-1'];
+      
+      const metrics = [
+        { type: 'pv_generation', value: this.generateValue(pattern.pv_generation, timeMultipliers.solar), unit: 'kW' },
+        { type: 'net_load', value: this.generateValue(pattern.net_load, timeMultipliers.load), unit: 'kW' },
+        { type: 'battery_discharge', value: this.generateValue(pattern.battery_discharge), unit: 'kW' },
+        { type: 'grid_draw', value: this.generateValue(pattern.grid_draw), unit: 'kW' },
+        { type: 'soc', value: Math.min(100, Math.max(0, this.generateValue(pattern.soc))), unit: '%' },
+        { type: 'voltage', value: this.generateValue(pattern.voltage), unit: 'V' },
+        { type: 'current', value: this.generateValue(pattern.current), unit: 'A' },
+        { type: 'frequency', value: this.generateValue(pattern.frequency), unit: 'Hz' },
+        { type: 'thd', value: Math.max(0, Math.min(15, 2.5 + Math.random() * 3)), unit: '%' },
+        { type: 'power_factor', value: Math.max(0.75, Math.min(1.0, 0.92 + Math.random() * 0.06)), unit: '' },
+        { type: 'voltage_unbalance', value: Math.max(0, Math.min(5, 0.5 + Math.random() * 2)), unit: '%' }
+      ];
+
+      // TimescaleDB
+      if (timescale.enabled) {
+        try {
+          const tsMetrics = metrics.map(m => ({
+            timestamp: now,
+            site_id: siteId,
+            asset_id: `asset-${m.type}`,
+            metric_type: m.type,
+            metric_value: parseFloat(m.value.toFixed(2)),
+            unit: m.unit,
+            tags: { source: 'simulator' }
+          }));
+          await timescale.insertMetrics(tsMetrics);
+        } catch (err) {
+          console.error('TimescaleDB write error:', err.message);
+        }
+      }
+
+      // MQTT
+      if (mqtt.enabled && mqtt.connected) {
+        metrics.forEach(m => {
+          mqtt.publish(`vidyutai/${siteId}/asset-${m.type}/${m.type}`, {
+            timestamp: now.toISOString(),
+            value: parseFloat(m.value.toFixed(2)),
+            unit: m.unit,
+            source: 'simulator'
+          });
+        });
+      }
+
+      // Redis
+      if (redis.enabled) {
+        try {
+          const cacheData = metrics.reduce((acc, m) => {
+            acc[m.type] = { value: m.value, unit: m.unit, timestamp: now };
+            return acc;
+          }, {});
+          await redis.set(`site:${siteId}:latest`, cacheData, 900);
+        } catch (err) {
+          console.error('Redis cache error:', err.message);
+        }
+      }
+    }
   }
   
   /**
@@ -230,6 +300,7 @@ class RealtimeSimulator {
     }
 
     console.log(`🚀 Starting real-time data simulator (interval: ${this.intervalMs}ms / ${this.intervalMs / 60000} minutes)`);
+    console.log(`📍 Infrastructure: SQLite=✅ | TimescaleDB=${timescale.enabled} | Redis=${redis.enabled} | MQTT=${mqtt.enabled}`);
     this.isRunning = true;
     
     // Generate initial data point

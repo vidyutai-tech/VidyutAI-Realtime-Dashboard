@@ -66,7 +66,7 @@ export interface MaintenanceAsset {
   type: string;
   modelNumber: string;
   installDate: string;
-  status: 'operational' | 'degraded' | 'offline';
+  status: 'operational' | 'degraded' | 'offline' | 'online' | 'maintenance' | 'warning' | 'error';
   failure_probability: number;
   rank: number;
 }

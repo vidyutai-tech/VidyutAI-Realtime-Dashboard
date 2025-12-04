@@ -88,8 +88,10 @@ const AssetEditorModal: React.FC<AssetEditorModalProps> = ({ asset, onClose, onS
                         <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
                         <select id="status" name="status" value={formData.status} onChange={handleChange} className={inputFieldClasses}>
                             <option value="operational">Operational</option>
+                            <option value="online">Online</option>
                             <option value="degraded">Degraded</option>
                             <option value="offline">Offline</option>
+                            <option value="maintenance">Maintenance</option>
                         </select>
                     </div>
                 </div>
