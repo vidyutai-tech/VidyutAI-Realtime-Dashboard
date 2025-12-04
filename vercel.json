@@ -7,16 +7,25 @@
       "config": {
         "distDir": "dist"
       }
+    },
+    {
+      "src": "api/index.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
+    {
+      "src": "/api/v1/(.*)",
+      "dest": "/api/index.js"
+    },
     {
       "src": "/(.*)",
       "dest": "/frontend/$1"
     }
   ],
   "env": {
-    "VITE_API_BASE_URL": "https://vidyutai-backend.vercel.app/api/v1"
+    "VITE_API_BASE_URL": "https://spel.vidyutai.in/api/v1",
+    "NODE_ENV": "production"
   }
 }
 

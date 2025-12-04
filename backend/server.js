@@ -251,13 +251,19 @@ app.use((req, res) => {
   });
 });
 
-// Start server
-const PORT = process.env.PORT || 5001;
-server.listen(PORT, () => {
-  console.log(`🚀 Backend server running on port ${PORT}`);
-  console.log(`📊 API: http://localhost:${PORT}/api/v1`);
-  console.log(`🔌 Socket.IO ready for real-time updates`);
-});
+// Export for Vercel serverless
+module.exports = app;
 
-module.exports = { app, io };
+// Start server (only when not on Vercel)
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 5001;
+  server.listen(PORT, () => {
+    console.log(`🚀 Backend server running on port ${PORT}`);
+    console.log(`📊 API: http://localhost:${PORT}/api/v1`);
+    console.log(`🔌 Socket.IO ready for real-time updates`);
+  });
+}
+
+// For local imports that need io
+module.exports.io = io;
 

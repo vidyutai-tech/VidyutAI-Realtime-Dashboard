@@ -2,8 +2,8 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-// Database file path
-const DB_PATH = path.join(__dirname, 'vidyutai.db');
+// Database file path - Use in-memory on Vercel (read-only filesystem)
+const DB_PATH = process.env.VERCEL ? ':memory:' : path.join(__dirname, 'vidyutai.db');
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 const SEED_PATH = path.join(__dirname, 'seed.sql');
 

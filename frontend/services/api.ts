@@ -8,7 +8,7 @@ declare global {
   }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? 'https://spel.vidyutai.in/api/v1' : 'http://localhost:5001/api/v1');
 
 // --- Helper for Auth Headers ---
 const getAuthHeaders = (): HeadersInit => {
@@ -374,7 +374,7 @@ export const explainForecast = async (forecastData: ForecastResponse): Promise<{
 };
 
 export const getAIServiceURL = (): string => {
-  return (import.meta as any).env?.VITE_AI_BASE_URL || "http://localhost:8000";
+  return (import.meta as any).env?.VITE_AI_BASE_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? 'https://spel.vidyutai.in/ai' : 'http://localhost:8000');
 };
 
 // --- Hackathon Features ---
