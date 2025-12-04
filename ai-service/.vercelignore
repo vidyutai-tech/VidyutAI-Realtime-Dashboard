@@ -1,0 +1,27 @@
+# Exclude unnecessary files from Vercel deployment
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Exclude training data and scripts (not needed in production)
+data/generate_synthetic_prediction_data.py
+data/*_training_data.csv
+train_prediction_models.py
+data_analysis_and_ml_training.py
+generate_dataset.py
+
+# Exclude large files not needed for production
+app/ml-models/dashboard_outputs/
+notebooks/
+*.ipynb
+
