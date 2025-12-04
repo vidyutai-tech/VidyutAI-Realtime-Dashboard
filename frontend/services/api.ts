@@ -8,7 +8,7 @@ declare global {
   }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? 'https://spel.vidyutai.in/api/v1' : 'http://localhost:5001/api/v1');
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? '/api/v1' : 'http://localhost:5001/api/v1');
 
 // --- Helper for Auth Headers ---
 const getAuthHeaders = (): HeadersInit => {
@@ -32,7 +32,7 @@ export interface User {
 
 export const apiLogin = async (email: string, password: string): Promise<{ token: string; user: User }> => {
   console.log(`Logging in with ${email}`);
-  
+
   const response = await fetch(`${API_BASE_URL}/auth/token`, {
     method: 'POST',
     headers: {
@@ -308,7 +308,7 @@ export interface ForecastResponse {
 }
 
 export const forecastEnergy = async (input: ForecastInput): Promise<ForecastResponse> => {
-  const AI_SERVICE_URL = (import.meta as any).env?.VITE_AI_BASE_URL || "http://localhost:8000";
+  const AI_SERVICE_URL = getAIServiceURL();
   const response = await fetch(`${AI_SERVICE_URL}/api/v1/forecast/energy`, {
     method: 'POST',
     headers: getAuthHeaders(),
@@ -347,7 +347,7 @@ export const getForecastSummary = async (
   siteId?: string,
   forecastType: 'production' | 'demand' | 'consumption' = 'consumption'
 ): Promise<ForecastResponse> => {
-  const AI_SERVICE_URL = (import.meta as any).env?.VITE_AI_BASE_URL || "http://localhost:8000";
+  const AI_SERVICE_URL = getAIServiceURL();
   const params = new URLSearchParams({ forecast_type: forecastType });
   if (siteId) params.append('site_id', siteId);
   
@@ -360,7 +360,7 @@ export const getForecastSummary = async (
 };
 
 export const explainForecast = async (forecastData: ForecastResponse): Promise<{ success: boolean; explanation: string; fallback?: boolean }> => {
-  const AI_SERVICE_URL = (import.meta as any).env?.VITE_AI_BASE_URL || "http://localhost:8000";
+  const AI_SERVICE_URL = getAIServiceURL();
   const response = await fetch(`${AI_SERVICE_URL}/api/v1/forecast/explain`, {
     method: 'POST',
     headers: getAuthHeaders(),
@@ -374,7 +374,7 @@ export const explainForecast = async (forecastData: ForecastResponse): Promise<{
 };
 
 export const getAIServiceURL = (): string => {
-  return (import.meta as any).env?.VITE_AI_BASE_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? 'https://spel.vidyutai.in/ai' : 'http://localhost:8000');
+  return (import.meta as any).env?.VITE_AI_BASE_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? '/ai' : 'http://localhost:8000');
 };
 
 // --- Hackathon Features ---

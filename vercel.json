@@ -35,8 +35,8 @@
     }
   ],
   "env": {
-    "VITE_API_BASE_URL": "https://spel.vidyutai.in/api/v1",
-    "VITE_AI_BASE_URL": "https://spel.vidyutai.in/ai",
+    "VITE_API_BASE_URL": "/api/v1",
+    "VITE_AI_BASE_URL": "/ai",
     "NODE_ENV": "production"
   }
 }
