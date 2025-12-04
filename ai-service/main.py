@@ -50,6 +50,22 @@ except ImportError:
     FORECASTING_AVAILABLE = False
     logger.warning("Forecasting router not available - app.api.endpoints.forecasting not found")
 
+# Import actions router (for AI insights)
+try:
+    from app.api.endpoints import actions
+    ACTIONS_AVAILABLE = True
+except ImportError:
+    ACTIONS_AVAILABLE = False
+    logger.warning("Actions router not available - app.api.endpoints.actions not found")
+
+# Import predictions router (for AI predictions)
+try:
+    from app.api.endpoints import predictions_new
+    PREDICTIONS_AVAILABLE = True
+except ImportError:
+    PREDICTIONS_AVAILABLE = False
+    logger.warning("Predictions router not available - app.api.endpoints.predictions_new not found")
+
 # Initialize FastAPI app
 app = FastAPI(
     title="VidyutAI AI Service",
@@ -83,6 +99,16 @@ if DEMAND_OPTIMIZATION_AVAILABLE:
 if FORECASTING_AVAILABLE:
     app.include_router(forecasting.router, prefix="/api/v1", tags=["Forecasting"])
     logger.info("Forecasting router registered at /api/v1/forecast/*")
+
+# Include actions router if available (for AI insights)
+if ACTIONS_AVAILABLE:
+    app.include_router(actions.router, prefix="/api/v1", tags=["Actions"])
+    logger.info("Actions router registered at /api/v1/actions/*")
+
+# Include predictions router if available (for AI predictions)
+if PREDICTIONS_AVAILABLE:
+    app.include_router(predictions_new.router, prefix="/api/v1", tags=["AI Predictions"])
+    logger.info("Predictions router registered at /api/v1/predictions/*")
 
 # Initialize components
 data_processor = None

@@ -1,0 +1,21 @@
+{
+  "model_type": "RandomForestRegressor",
+  "features": [
+    "cycle_count",
+    "temperature_c",
+    "voltage_v",
+    "current_a",
+    "soc_percent",
+    "discharge_rate",
+    "charge_rate",
+    "age_days"
+  ],
+  "target": "rul_hours",
+  "n_samples": 5000,
+  "metrics": {
+    "mae": 206.89173014191834,
+    "rmse": 265.0646600383643,
+    "r2": 0.9835265329743806
+  },
+  "trained_at": "2025-12-03T21:24:13.043290"
+}

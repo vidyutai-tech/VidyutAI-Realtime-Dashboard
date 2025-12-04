@@ -1,0 +1,21 @@
+{
+  "model_type": "GradientBoostingRegressor",
+  "features": [
+    "load_kw",
+    "voltage_v",
+    "current_a",
+    "power_factor",
+    "cable_length_m",
+    "transformer_load_percent",
+    "ambient_temp_c",
+    "frequency_hz"
+  ],
+  "target": "loss_percent",
+  "n_samples": 4000,
+  "metrics": {
+    "mae": 0.2976941040193545,
+    "rmse": 0.37838267964669897,
+    "r2": 0.9768711293510411
+  },
+  "trained_at": "2025-12-03T21:24:15.322314"
+}

@@ -1,0 +1,20 @@
+{
+  "model_type": "GradientBoostingRegressor",
+  "features": [
+    "age_years",
+    "irradiance_wm2",
+    "temperature_c",
+    "dust_index",
+    "humidity_percent",
+    "tilt_angle_deg",
+    "efficiency_initial"
+  ],
+  "target": "degradation_percent",
+  "n_samples": 3000,
+  "metrics": {
+    "mae": 2.679640058260491,
+    "rmse": 3.338949374994526,
+    "r2": 0.7849982263756761
+  },
+  "trained_at": "2025-12-03T21:24:13.973683"
+}

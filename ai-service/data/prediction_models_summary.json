@@ -1,0 +1,56 @@
+{
+  "battery_rul": {
+    "samples": 5000,
+    "features": [
+      "cycle_count",
+      "temperature_c",
+      "voltage_v",
+      "current_a",
+      "soc_percent",
+      "discharge_rate",
+      "charge_rate",
+      "age_days"
+    ],
+    "target": "rul_hours",
+    "target_range": [
+      100.0,
+      8675.528282573312
+    ]
+  },
+  "solar_degradation": {
+    "samples": 3000,
+    "features": [
+      "age_years",
+      "irradiance_wm2",
+      "temperature_c",
+      "dust_index",
+      "humidity_percent",
+      "tilt_angle_deg",
+      "efficiency_initial"
+    ],
+    "target": "degradation_percent",
+    "target_range": [
+      -0.9138535440462559,
+      41.305554993578845
+    ]
+  },
+  "energy_loss": {
+    "samples": 4000,
+    "features": [
+      "load_kw",
+      "voltage_v",
+      "current_a",
+      "power_factor",
+      "cable_length_m",
+      "transformer_load_percent",
+      "ambient_temp_c",
+      "frequency_hz"
+    ],
+    "target": "loss_percent",
+    "target_range": [
+      1.6032387491060431,
+      15.952269491642609
+    ]
+  },
+  "generated_at": "2025-12-03T21:18:28.898720"
+}

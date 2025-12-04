@@ -1,0 +1,66 @@
+{
+  "battery_rul": {
+    "model_type": "RandomForestRegressor",
+    "features": [
+      "cycle_count",
+      "temperature_c",
+      "voltage_v",
+      "current_a",
+      "soc_percent",
+      "discharge_rate",
+      "charge_rate",
+      "age_days"
+    ],
+    "target": "rul_hours",
+    "n_samples": 5000,
+    "metrics": {
+      "mae": 206.89173014191834,
+      "rmse": 265.0646600383643,
+      "r2": 0.9835265329743806
+    },
+    "trained_at": "2025-12-03T21:24:13.043290"
+  },
+  "solar_degradation": {
+    "model_type": "GradientBoostingRegressor",
+    "features": [
+      "age_years",
+      "irradiance_wm2",
+      "temperature_c",
+      "dust_index",
+      "humidity_percent",
+      "tilt_angle_deg",
+      "efficiency_initial"
+    ],
+    "target": "degradation_percent",
+    "n_samples": 3000,
+    "metrics": {
+      "mae": 2.679640058260491,
+      "rmse": 3.338949374994526,
+      "r2": 0.7849982263756761
+    },
+    "trained_at": "2025-12-03T21:24:13.973683"
+  },
+  "energy_loss": {
+    "model_type": "GradientBoostingRegressor",
+    "features": [
+      "load_kw",
+      "voltage_v",
+      "current_a",
+      "power_factor",
+      "cable_length_m",
+      "transformer_load_percent",
+      "ambient_temp_c",
+      "frequency_hz"
+    ],
+    "target": "loss_percent",
+    "n_samples": 4000,
+    "metrics": {
+      "mae": 0.2976941040193545,
+      "rmse": 0.37838267964669897,
+      "r2": 0.9768711293510411
+    },
+    "trained_at": "2025-12-03T21:24:15.322314"
+  },
+  "total_training_time": "Complete",
+  "status": "ready_for_inference"
+}
