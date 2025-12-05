@@ -68,7 +68,7 @@ router.post('/technical-sizing', (req, res) => {
 
     const equipmentCost = solarCost + batteryCost + inverterCost + dcConverterCost;
     const installationCost = equipmentCost * installationPercent;
-    const totalCapex = equipmentCost + installationCost;
+    let totalCapex = equipmentCost + installationCost;
 
     // Add hydrogen costs if applicable
     let hydrogenCapex = 0;
